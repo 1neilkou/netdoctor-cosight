@@ -141,10 +141,11 @@ def _build_prompt(
     thresholds_str   = "  ".join(thresholds[:6]) if thresholds else "（无）"
     tools_str        = "、".join(routed_tools) if routed_tools else "（无）"
 
-    # 规则评估结果（如有）
+    # 工具执行结果（如有）。这里接收真实执行层传入的 tool_results，
+    # 不包含 expected_answer。
     rule_section = ""
-    if tool_results and "rule_result" in tool_results:
-        rr = tool_results["rule_result"]
+    if tool_results and "rule_evaluator" in tool_results:
+        rr = tool_results["rule_evaluator"]
         findings = rr.get("rule_findings", [])
         triggered = rr.get("triggered_rules", [])
         if findings or triggered:
@@ -153,6 +154,24 @@ def _build_prompt(
                 + (f"  识别规则：{chr(10).join(f'  - {f}' for f in findings[:4])}\n" if findings else "")
                 + (f"  触发规则：{', '.join(triggered)}\n" if triggered else "")
             )
+
+    calculator_section = ""
+    if tool_results and "calculator_tool" in tool_results:
+        cr = tool_results["calculator_tool"]
+        calculator_section = (
+            "\n【计算工具结果】\n"
+            f"  类型：{cr.get('calculation_type', '')}\n"
+            f"  结果：{json.dumps(cr.get('result', {}), ensure_ascii=False)}\n"
+        )
+
+    planner_section = ""
+    if tool_results and "task_planner" in tool_results:
+        pr = tool_results["task_planner"]
+        planner_section = (
+            "\n【规划工具结果】\n"
+            f"  阶段数：{len(pr.get('stages', []))}\n"
+            f"  阶段：{json.dumps(pr.get('stages', []), ensure_ascii=False)}\n"
+        )
 
     prompt = (
         "你是一个5G网络运维题目解题专家。请根据以下题目信息和分析结果生成答案。"
@@ -168,7 +187,7 @@ def _build_prompt(
         f"隐含约束：{constr_str}\n"
         f"已识别阈值/数值：{thresholds_str}\n"
         f"选用工具：{tools_str}\n"
-        f"{rule_section}\n"
+        f"{rule_section}{calculator_section}{planner_section}\n"
         "请输出如下 JSON（不要添加其他字段）：\n"
         "{\n"
         '  "final_answer": "完整的答案内容",\n'

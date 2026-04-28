@@ -22,6 +22,7 @@ evaluate_solver.py — 批量评测模块
     partial_rate           : status == "partial" 的比例
 """
 from __future__ import annotations
+import re
 
 _JSON_TYPES    = {"JSON格式转换", "文本信息抽取"}
 _NUMERIC_TYPES = {"简单计算", "表格排序", "材料问答"}
@@ -55,12 +56,16 @@ def evaluate_results(results: list[dict], questions: list[dict]) -> dict:
             "llm_answer_success_rate":  0.0,
             "llm_answer_source_rate":   0.0,
             "partial_rate":             0.0,
+            "expected_tools_coverage_rate": 0.0,
+            "expected_trace_points_coverage_rate": 0.0,
+            "executed_tools_rate":       0.0,
             "note":                     "无结果可评测",
         }
 
     expected: dict[str, str] = {
         q["question_id"]: q.get("expected_answer", "") for q in questions
     }
+    question_by_id: dict[str, dict] = {q["question_id"]: q for q in questions}
 
     run_success     = 0
     schema_valid    = 0
@@ -70,6 +75,12 @@ def evaluate_results(results: list[dict], questions: list[dict]) -> dict:
     llm_ans_success = 0
     llm_ans_source  = 0
     partial_count   = 0
+    expected_tools_covered = 0
+    expected_tools_total   = 0
+    trace_points_covered   = 0
+    trace_points_total     = 0
+    routed_tools_total     = 0
+    executed_routed_total  = 0
 
     exact_match_count    = 0
     normalized_match_cnt = 0
@@ -91,6 +102,9 @@ def evaluate_results(results: list[dict], questions: list[dict]) -> dict:
         vr      = r.get("verifier_result", {})
         ans_src = r.get("answer_source", "placeholder")
         gr      = r.get("grading_result", {})
+        routed_tools = r.get("routed_tools", tools)
+        executed_tools = r.get("executed_tools", [])
+        q_item = question_by_id.get(qid, {})
 
         if status == "success":
             run_success += 1
@@ -108,6 +122,24 @@ def evaluate_results(results: list[dict], questions: list[dict]) -> dict:
             llm_ans_source += 1
             if answer:
                 llm_ans_success += 1
+
+        expected_tools = q_item.get("expected_tools", [])
+        if expected_tools:
+            expected_tools_total += 1
+            if set(expected_tools).issubset(set(executed_tools)):
+                expected_tools_covered += 1
+
+        expected_trace_points = q_item.get("expected_trace_points", [])
+        if expected_trace_points:
+            trace_text = _trace_to_text(trace)
+            for point in expected_trace_points:
+                trace_points_total += 1
+                if _trace_point_covered(point, trace_text):
+                    trace_points_covered += 1
+
+        if isinstance(routed_tools, list):
+            routed_tools_total += len(routed_tools)
+            executed_routed_total += len(set(routed_tools) & set(executed_tools))
 
         # 语义评测指标（来自 grading_result）
         if gr:
@@ -165,6 +197,54 @@ def evaluate_results(results: list[dict], questions: list[dict]) -> dict:
         "llm_answer_success_rate":  rate(llm_ans_success),
         "llm_answer_source_rate":   rate(llm_ans_source),
         "partial_rate":             rate(partial_count),
+        "expected_tools_coverage_rate": (
+            round(expected_tools_covered / expected_tools_total, 3)
+            if expected_tools_total else 0.0
+        ),
+        "expected_trace_points_coverage_rate": (
+            round(trace_points_covered / trace_points_total, 3)
+            if trace_points_total else 0.0
+        ),
+        "executed_tools_rate": (
+            round(executed_routed_total / routed_tools_total, 3)
+            if routed_tools_total else 0.0
+        ),
         **level_match_rates,
         "note": note,
     }
+
+
+def _trace_to_text(trace: list) -> str:
+    parts: list[str] = []
+    for step in trace if isinstance(trace, list) else []:
+        if not isinstance(step, dict):
+            parts.append(str(step))
+            continue
+        parts.append(str(step.get("action", "")))
+        parts.append(str(step.get("tool", "")))
+        parts.append(str(step.get("input_summary", "")))
+        parts.append(str(step.get("observation", "")))
+    return " ".join(parts)
+
+
+def _trace_point_covered(point: str, trace_text: str) -> bool:
+    tokens = _key_tokens(point)
+    if not tokens:
+        return point[:12] in trace_text
+    hits = sum(1 for token in tokens if token in trace_text)
+    return hits / len(tokens) >= 0.5
+
+
+def _key_tokens(text: str) -> list[str]:
+    tokens: list[str] = []
+    tokens.extend(re.findall(r"-?\d+(?:\.\d+)?", text))
+    tokens.extend(re.findall(r"CELL_[A-Z0-9_]+|DAS_[A-Z0-9_]+|PRB_UL|RSRP|A3|CIO", text))
+    tokens.extend(re.findall(r"[A-Za-z_]{2,}", text))
+    tokens.extend(re.findall(r"[\u4e00-\u9fff]{2,4}", text))
+    seen: set[str] = set()
+    unique: list[str] = []
+    for token in tokens:
+        if token not in seen:
+            seen.add(token)
+            unique.append(token)
+    return unique[:12]

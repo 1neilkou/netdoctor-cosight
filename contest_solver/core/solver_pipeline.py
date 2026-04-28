@@ -17,11 +17,11 @@ solver_pipeline.py — 区域赛解题主流程
     SolverPipeline 类（旧接口，保留不变）
 """
 from contest_solver.tools.question_parser  import QuestionParser, parse_question
-from contest_solver.tools.rule_evaluator   import evaluate_rules
 from contest_solver.tools.trace_recorder   import TraceRecorder
 from contest_solver.tools.answer_formatter import format_answer, AnswerFormatter
 from contest_solver.tools.answer_verifier  import verify_answer
 from contest_solver.core.tool_router       import ToolRouter
+from contest_solver.core.tool_executor     import execute_tools, summarize_tool_results
 from contest_solver.eval.semantic_grader   import grade_answer
 
 _router = ToolRouter()
@@ -93,27 +93,34 @@ def solve_question(
         )
 
         # ----------------------------------------------------------------
-        # Step 3 — 规则评估
+        # Step 3 — 真实工具执行
         # ----------------------------------------------------------------
-        rule_result: dict = {}
-        if "rule_evaluator" in selected_tools:
-            rule_result = evaluate_rules(parsed)
+        execution_result = execute_tools(
+            question_item = question_item,
+            parsed_result = parsed,
+            routed_tools  = selected_tools,
+        )
+        tool_results = execution_result["tool_results"]
+        executed_tools = execution_result["executed_tools"]
+        failed_tools = execution_result["failed_tools"]
+        tool_results_summary = summarize_tool_results(tool_results)
+        rule_result: dict = tool_results.get("rule_evaluator", {})
 
-            obs: dict = {
-                "rule_findings":   rule_result.get("rule_findings", []),
-                "triggered_rules": rule_result.get("triggered_rules", []),
-            }
-            ev = rule_result.get("rule_evidence", {})
-            if "multi_level_threshold" in ev:
-                obs["conclusion"] = ev["multi_level_threshold"].get("conclusion", "")
-
-            recorder.add_step(
-                action        = "规则评估",
-                tool          = "rule_evaluator",
-                input_summary = f"threshold_values={parsed['threshold_values'][:3]}",
-                observation   = obs,
-                status        = "success" if rule_result.get("rule_findings") else "skipped",
-            )
+        recorder.add_step(
+            action        = "执行路由工具",
+            tool          = "tool_executor",
+            input_summary = f"routed_tools={selected_tools}",
+            observation   = {
+                "executed_tools": executed_tools,
+                "failed_tools": failed_tools,
+                "tool_results_summary": tool_results_summary,
+                "evidence": execution_result.get("evidence", [])[:8],
+            },
+            status        = (
+                "success" if executed_tools and not failed_tools
+                else ("skipped" if not executed_tools else "failed")
+            ),
+        )
 
         # ----------------------------------------------------------------
         # Step 4 — 生成最终答案
@@ -121,7 +128,6 @@ def solve_question(
         if use_llm_answer:
             from contest_solver.tools.llm_answerer import generate_llm_answer
 
-            tool_results = {"rule_result": rule_result} if rule_result else None
             answer_result = generate_llm_answer(
                 question_item = question_item,
                 parsed_result = parsed,
@@ -189,12 +195,26 @@ def solve_question(
         # ----------------------------------------------------------------
         # Step 6 — 校验结果结构
         # ----------------------------------------------------------------
+        pipeline_executed_tools = list(executed_tools)
+        for built_in_tool in (
+            "question_parser",
+            "trace_recorder",
+            "answer_formatter",
+            "answer_verifier",
+        ):
+            if built_in_tool in selected_tools and built_in_tool not in pipeline_executed_tools:
+                pipeline_executed_tools.append(built_in_tool)
+
         verifier_result = verify_answer(result, question_item)
         result["verifier_result"]       = verifier_result
         result["semantic_parse_source"] = semantic_source
         result["answer_source"]         = answer_source
         result["llm_answer_debug"]      = llm_answer_debug
         result["grading_result"]        = grade_answer(result, question_item)
+        result["routed_tools"]          = selected_tools
+        result["executed_tools"]        = pipeline_executed_tools
+        result["failed_tools"]          = failed_tools
+        result["tool_results_summary"]  = tool_results_summary
 
         return result
 
@@ -220,6 +240,10 @@ def solve_question(
             "exact_match": False, "normalized_match": False, "semantic_score": 0.0,
             "matched_points": [], "missing_points": [], "grading_method": "error",
         }
+        error_result["routed_tools"]          = []
+        error_result["executed_tools"]        = []
+        error_result["failed_tools"]          = []
+        error_result["tool_results_summary"]  = {}
         return error_result
 
 
