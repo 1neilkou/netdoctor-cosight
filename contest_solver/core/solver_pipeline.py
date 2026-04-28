@@ -22,6 +22,7 @@ from contest_solver.tools.trace_recorder   import TraceRecorder
 from contest_solver.tools.answer_formatter import format_answer, AnswerFormatter
 from contest_solver.tools.answer_verifier  import verify_answer
 from contest_solver.core.tool_router       import ToolRouter
+from contest_solver.eval.semantic_grader   import grade_answer
 
 _router = ToolRouter()
 
@@ -193,6 +194,7 @@ def solve_question(
         result["semantic_parse_source"] = semantic_source
         result["answer_source"]         = answer_source
         result["llm_answer_debug"]      = llm_answer_debug
+        result["grading_result"]        = grade_answer(result, question_item)
 
         return result
 
@@ -214,6 +216,10 @@ def solve_question(
         error_result["semantic_parse_source"] = "fallback"
         error_result["answer_source"]         = "placeholder"
         error_result["llm_answer_debug"]      = {}
+        error_result["grading_result"]        = {
+            "exact_match": False, "normalized_match": False, "semantic_score": 0.0,
+            "matched_points": [], "missing_points": [], "grading_method": "error",
+        }
         return error_result
 
 
