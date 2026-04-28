@@ -42,12 +42,27 @@ class ToolRouter:
     _PURE_READING_SIGNALS = {"是什么", "什么是", "有哪些", "请说明"}
 
     def select_tools(self, parsed_question: dict) -> list[str]:
-        """根据解析结果智能选择工具列表，返回有序、去重的工具名列表。"""
+        """根据解析结果智能选择工具列表，返回有序、去重的工具名列表。
+
+        优先级：
+          1. merged.required_capabilities 指定的能力需求
+          2. 题型 / 难度级别 的静态规则路由
+          3. semantic_parse.suggested_tools 的 LLM/fallback 建议
+        """
         qtype            = parsed_question.get("question_type", "")
         level            = parsed_question.get("level", 1)
         constraints      = parsed_question.get("constraints", [])
         threshold_values = parsed_question.get("threshold_values", [])
         text             = parsed_question.get("question", "")
+
+        # 新增：merged / semantic_parse 字段
+        merged               = parsed_question.get("merged", {})
+        required_capabilities = merged.get("required_capabilities", [])
+        semantic_parse       = parsed_question.get("semantic_parse", {})
+        suggested_tools      = [
+            t for t in semantic_parse.get("suggested_tools", [])
+            if t in self.TOOL_REGISTRY
+        ]
 
         tools: list[str] = []
 
@@ -55,7 +70,17 @@ class ToolRouter:
             if t not in tools:
                 tools.append(t)
 
-        constraint_text = " ".join(constraints)
+        constraint_text = " ".join(str(c) for c in constraints)
+
+        # ---- required_capabilities（来自 merged）--------------------
+        if "rule_evaluation" in required_capabilities:
+            add("rule_evaluator")
+        if "calculation" in required_capabilities:
+            add("calculator_tool")
+        if "planning" in required_capabilities:
+            add("task_planner")
+        if "multi_hop_reasoning" in required_capabilities:
+            add("trace_recorder")
 
         # ---- question_parser ----------------------------------------
         if qtype in {
@@ -68,7 +93,6 @@ class ToolRouter:
         if qtype in {"简单计算", "表格排序", "数据与规则综合"}:
             add("calculator_tool")
         elif qtype == "材料问答":
-            # 仅在题目中出现计算意图词时才加入
             if any(w in text for w in self._CALC_INTENTS):
                 add("calculator_tool")
         elif qtype not in {"通信常识问答", "文本信息抽取", "JSON格式转换", "复杂规划"}:
@@ -83,6 +107,10 @@ class ToolRouter:
         )
         if has_rule_signal:
             add("rule_evaluator")
+
+        # ---- semantic_parse.suggested_tools -------------------------
+        for t in suggested_tools:
+            add(t)
 
         # ---- trace_recorder -----------------------------------------
         if level >= 2 or qtype in {"复杂规划", "多跳问答", "数据与规则综合"}:

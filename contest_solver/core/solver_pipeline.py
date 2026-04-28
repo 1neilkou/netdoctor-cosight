@@ -28,35 +28,39 @@ from contest_solver.core.tool_router       import ToolRouter
 _router = ToolRouter()
 
 
-def solve_question(question_item: dict) -> dict:
+def solve_question(question_item: dict, use_llm: bool = False) -> dict:
     """
     对单道题目执行完整的离线解题 pipeline。
 
     Args:
         question_item: sample_questions.json 中的单条记录，需含 question_id /
                        level / question_type / question / expected_answer 字段。
+        use_llm:       True 时调用 LLM 进行语义解析（需配置环境变量 API_KEY 等）；
+                       False（默认）时使用规则 fallback，不调用任何外部 API。
 
     Returns:
-        format_answer() 输出结构，额外附加 verifier_result 字段。
+        format_answer() 输出结构，额外附加 verifier_result / semantic_parse_source 字段。
     """
     qid      = question_item.get("question_id", "UNKNOWN")
     recorder = TraceRecorder(qid)
 
     try:
         # ----------------------------------------------------------------
-        # Step 1 — 解析题目
+        # Step 1 — 解析题目（规则 + 可选 LLM 语义解析）
         # ----------------------------------------------------------------
-        parsed = parse_question(question_item)
+        parsed = parse_question(question_item, use_llm=use_llm)
+        semantic_source = parsed.get("semantic_parse", {}).get("source", "fallback")
 
         recorder.add_step(
             action        = "解析题目",
             tool          = "question_parser",
-            input_summary = f"题目ID={qid}  题型={parsed['question_type']}  难度=L{parsed['level']}",
+            input_summary = f"题目ID={qid}  题型={parsed['question_type']}  难度=L{parsed['level']}  语义解析={semantic_source}",
             observation   = {
                 "keywords_top5":      parsed["keywords"][:5],
                 "metric_values":      parsed["metric_values"][:6],
                 "threshold_values":   parsed["threshold_values"][:4],
                 "constraints_count":  len(parsed["constraints"]),
+                "semantic_source":    semantic_source,
             },
         )
 
@@ -130,7 +134,8 @@ def solve_question(question_item: dict) -> dict:
         # Step 6 — 校验结果结构
         # ----------------------------------------------------------------
         verifier_result = verify_answer(result, question_item)
-        result["verifier_result"] = verifier_result
+        result["verifier_result"]      = verifier_result
+        result["semantic_parse_source"] = semantic_source
 
         return result
 
@@ -146,9 +151,10 @@ def solve_question(question_item: dict) -> dict:
             status        = "error",
             error         = f"{type(exc).__name__}: {exc}",
         )
-        error_result["verifier_result"] = {
+        error_result["verifier_result"]      = {
             "is_valid": False, "missing_fields": [], "warnings": [str(exc)], "score": 0.0
         }
+        error_result["semantic_parse_source"] = "fallback"
         return error_result
 
 
