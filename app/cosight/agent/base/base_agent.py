@@ -15,6 +15,7 @@
 
 import inspect
 import json
+import os
 import sys
 import time
 from typing import List, Dict, Any
@@ -392,6 +393,8 @@ class BaseAgent:
             # 为了避免日志过大，这里不再打印完整 messages，只记录关键元信息
             logger.info(f"act agent call with tools start: iter={i}, step_index={step_index}, "
                         f"msg_count={len(messages)}, tools_count={len(self.tools)}")
+            if step_index is not None:
+                self._record_actor_prompt_stats(messages, step_index)
             response = self.llm.create_with_tools(messages, self.tools)
 
             # Process initial response
@@ -407,6 +410,83 @@ class BaseAgent:
         if max_iteration > 1:
             return self._handle_max_iteration(messages, step_index)
         return messages[-1].get("content")
+
+    def _record_actor_prompt_stats(self, messages: List[Dict[str, Any]], step_index=None):
+        try:
+            message_content_chars = 0
+            system_prompt_chars = 0
+            for message in messages or []:
+                if isinstance(message, dict):
+                    content_chars = len(str(message.get("content", "") or ""))
+                    message_content_chars += content_chars
+                    if message.get("role") == "system":
+                        system_prompt_chars += content_chars
+            tool_schema_chars = len(json.dumps(self.tools or [], ensure_ascii=False, default=str))
+            prompt_chars = message_content_chars + tool_schema_chars
+            mode = os.environ.get("COSIGHT_EXPERIMENT_MODE", "baseline")
+            task_id = os.environ.get("COSIGHT_TASK_ID", "")
+            stat = {
+                "role": "actor",
+                "step_index": step_index,
+                "prompt_chars": prompt_chars,
+                "prompt_est_tokens": prompt_chars // 4,
+                "message_content_chars": message_content_chars,
+                "message_content_est_tokens": message_content_chars // 4,
+                "tool_schema_chars": tool_schema_chars,
+                "tool_schema_est_tokens": tool_schema_chars // 4,
+                "message_count": len(messages or []),
+                "tool_count": len(self.tools or []),
+                "mode": mode,
+                "task_id": task_id,
+            }
+            breakdown = {
+                "role": "actor",
+                "step_index": step_index,
+                "mode": mode,
+                "task_id": task_id,
+                "system_prompt_chars": system_prompt_chars,
+                "final_prompt_chars": prompt_chars,
+                "final_prompt_est_tokens": prompt_chars // 4,
+            }
+            if mode == "optimized" and self.plan is not None:
+                templates = getattr(self.plan, "actor_prompt_breakdown_templates", {}) or {}
+                if isinstance(templates, dict):
+                    breakdown.update(templates.get(step_index, {}) or {})
+            print(
+                "[ACTOR_PROMPT] "
+                f"mode={stat['mode']} task_id={stat['task_id']} step={step_index} "
+                f"chars={stat['prompt_chars']} est_tokens={stat['prompt_est_tokens']} "
+                f"messages={stat['message_count']} tools={stat['tool_count']}"
+            )
+            if mode == "optimized":
+                print(
+                    "[ACTOR_PROMPT_BREAKDOWN] "
+                    f"mode={mode} task_id={task_id} step={step_index} "
+                    f"current={breakdown.get('current_step_chars', 0)} "
+                    f"deps={breakdown.get('dependency_context_chars', 0)} "
+                    f"recent={breakdown.get('recent_context_chars', 0)} "
+                    f"overview={breakdown.get('compact_plan_overview_chars', 0)} "
+                    f"artifacts={breakdown.get('artifact_refs_chars', 0)} "
+                    f"key_values={breakdown.get('key_values_chars', 0)} "
+                    f"total={breakdown['final_prompt_chars']} "
+                    f"est_tokens={breakdown['final_prompt_est_tokens']}"
+                )
+            else:
+                print(
+                    "[ACTOR_PROMPT_BREAKDOWN] "
+                    f"mode={mode} task_id={task_id} step={step_index} "
+                    f"total={breakdown['final_prompt_chars']} "
+                    f"est_tokens={breakdown['final_prompt_est_tokens']}"
+                )
+            if self.plan is not None:
+                if not hasattr(self.plan, "actor_prompt_stats"):
+                    self.plan.actor_prompt_stats = []
+                self.plan.actor_prompt_stats.append(stat)
+                if not hasattr(self.plan, "actor_prompt_breakdowns"):
+                    self.plan.actor_prompt_breakdowns = []
+                self.plan.actor_prompt_breakdowns.append(breakdown)
+        except Exception as exc:
+            logger.warning(f"Failed to record actor prompt stats: {exc}")
 
     def _process_response(self, response, messages, step_index):
         # 构建 assistant 消息，支持 thinking mode 的 reasoning_content 字段

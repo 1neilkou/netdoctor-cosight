@@ -72,6 +72,13 @@ class ChatLLM:
         self.max_messages = int(os.environ.get("MAX_MESSAGES", "20"))
         # 工具返回内容的最大长度（字符数），默认50000字符
         self.max_tool_content_length = int(os.environ.get("MAX_TOOL_CONTENT_LENGTH", "50000"))
+        self.usage_stats = {
+            "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
+        self.usage_records = []
         
         # 上下文压缩配置
         self.compression_enabled = os.environ.get("ENABLE_CONTEXT_COMPRESSION", "false").lower() in ("true", "1", "yes")
@@ -80,6 +87,33 @@ class ChatLLM:
         self.keep_recent_turns = int(os.environ.get("KEEP_RECENT_TURNS", "3"))  # 保留最近3轮
         self.keep_initial_turns = int(os.environ.get("KEEP_INITIAL_TURNS", "2"))  # 保留最初2轮
         logger.info(f"Context compression: enabled={self.compression_enabled}, max_tokens={self.max_context_tokens}, threshold={self.compression_threshold}, keep_initial={self.keep_initial_turns}, keep_recent={self.keep_recent_turns}")
+
+    def _record_usage(self, response, call_type: str, messages: List[Dict[str, Any]] = None, tools: List[Dict] = None):
+        usage = getattr(response, "usage", None)
+        if usage:
+            input_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+            output_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+            total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
+        else:
+            input_tokens = self._count_tokens(messages or [])
+            output_tokens = 0
+            total_tokens = input_tokens
+
+        record = {
+            "call_type": call_type,
+            "model": self.model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "message_count": len(messages or []),
+            "tool_count": len(tools or []),
+        }
+        self.usage_records.append(record)
+        self.usage_stats["calls"] += 1
+        self.usage_stats["input_tokens"] += input_tokens
+        self.usage_stats["output_tokens"] += output_tokens
+        self.usage_stats["total_tokens"] += total_tokens
+        return record
 
     @staticmethod
     def clean_none_values(data):
@@ -667,6 +701,7 @@ Keep facts, data, file paths. Remove redundancy. Output summary only:"""
                     # Langfuse 未启用，直接调用
                     response = self.client.chat.completions.create(**api_params)
                 # 为了避免日志过大，这里不再打印完整响应，只记录一次成功信息
+                self._record_usage(response, "with_tools", messages, tools)
                 logger.info("LLM with tools chat completions finished successfully.")
                 if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
                     self.check_and_fix_tool_call_params(response)
@@ -860,6 +895,7 @@ Keep facts, data, file paths. Remove redundancy. Output summary only:"""
         else:
             response = self.client.chat.completions.create(**api_params)
         # 为了避免日志过大，这里不再打印完整响应，只记录一次成功信息
+        self._record_usage(response, "chat", messages, None)
         logger.info("LLM chat completions finished successfully.")
         # 去除think标签
         content = response.choices[0].message.content

@@ -23,3 +23,10 @@ work_space/**
 .cursorindexingignore
 .specstory
 scripts/*
+
+# GAIA 数据集（gated，不能公开）
+contest/gaia_level1_validation.jsonl
+contest/results/
+
+# HuggingFace 缓存
+~/.cache/huggingface/

@@ -18,7 +18,7 @@ import re
 from typing import Dict
 
 from app.agent_dispatcher.infrastructure.entity.AgentInstance import AgentInstance
-from app.cosight.agent.actor.prompt.actor_prompt import actor_system_prompt, actor_system_prompt_zh, actor_execute_task_prompt, actor_execute_task_prompt_zh
+from app.cosight.agent.actor.prompt.actor_prompt import actor_system_prompt, actor_system_prompt_zh, actor_execute_task_prompt, actor_execute_task_prompt_zh, actor_execute_task_prompt_v2
 from app.cosight.agent.base.base_agent import BaseAgent
 from app.cosight.llm.chat_llm import ChatLLM
 from app.cosight.task.plan_report_manager import plan_report_event_manager
@@ -41,6 +41,21 @@ from app.cosight.tool.video_analysis_toolkit import VideoTool
 from app.cosight.tool.html_visualization_toolkit import HtmlVisualizationToolkit
 from config.config import get_tavily_config
 from app.common.logger_util import logger
+from app.cosight.state.actor_view import build_actor_view
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class TaskActorAgent(BaseAgent):
@@ -150,7 +165,23 @@ class TaskActorAgent(BaseAgent):
         self.plan.mark_step(step_index, step_status="in_progress")
         plan_report_event_manager.publish("plan_process", self.plan)
         is_chinese = bool(re.search(r'[\u4e00-\u9fff]', self.question)) if self.question else True
-        if is_chinese:
+        experiment_mode = os.environ.get("COSIGHT_EXPERIMENT_MODE", "baseline").strip().lower()
+        if experiment_mode == "optimized":
+            actor_view = build_actor_view(
+                self.plan,
+                step_index,
+                max_recent_steps=_env_int("COSIGHT_MAX_RECENT_STEPS", 1),
+                max_summary_chars=_env_int("COSIGHT_MAX_SUMMARY_CHARS", 500),
+                max_recent_chars=_env_int("COSIGHT_MAX_RECENT_CHARS", 300),
+                include_compact_overview=not _env_bool("COSIGHT_DISABLE_COMPACT_OVERVIEW"),
+                include_key_values=not _env_bool("COSIGHT_DISABLE_KEY_VALUES"),
+                include_artifact_refs=not _env_bool("COSIGHT_DISABLE_ARTIFACT_REFS"),
+            )
+            task_prompt = actor_execute_task_prompt_v2(question, step_index, actor_view, self.work_space_path)
+            if not hasattr(self.plan, "actor_prompt_breakdown_templates"):
+                self.plan.actor_prompt_breakdown_templates = {}
+            self.plan.actor_prompt_breakdown_templates[step_index] = actor_view.get("_prompt_breakdown", {})
+        elif is_chinese:
             task_prompt = actor_execute_task_prompt_zh(question, step_index, self.plan, self.work_space_path)
         else:
             task_prompt = actor_execute_task_prompt(question, step_index, self.plan, self.work_space_path)
