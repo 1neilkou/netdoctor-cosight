@@ -1,0 +1,179 @@
+
+==========================================================================
+  区域赛 Contest Solver — Pipeline Demo
+  共 10 道题  |  L1-基础: 7 道  L2-进阶: 2 道  L3-挑战: 1 道
+  语义解析：规则 fallback  |  答案生成：expected_answer 占位
+==========================================================================
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q001  L1-基础  [文本信息抽取]  status=success  confidence=0.90
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : question_parser  rule_evaluator  answer_formatter
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'MAJOR', 'PRB利用率', '上行...  metric_values=['93.5%']
+│    Step 2 [tool_router] 工具路由 → selected_tools=['question_parser', 'rule_eval...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=[]  triggered_rules=[]
+│    Step 4 [[placeholder: expected_answer]] 生成答案 → {"cell_id": "CELL_NJ_042", "alarm_time": "2026-04-28 09:15:3...
+│  最终答案   : {"cell_id": "CELL_NJ_042", "alarm_time": "2026-04-28 09:15:32", "prb_usage_ul": 93.5, "dur...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q002  L1-基础  [简单计算]  status=success  confidence=0.90
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : calculator_tool
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['下行吞吐量', '小区', '基站', 'CELL_A'...  metric_values=['85.6 Mbps', '92.3 Mbps', '78...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool']
+│    Step 3 [[placeholder: expected_answer]] 生成答案 → ① 总和 = 256.8 Mbps；② 平均值 = 85.60 Mbps；③ 差值 = 13.4 Mbps（CELL_B...
+│  最终答案   : ① 总和 = 256.8 Mbps；② 平均值 = 85.60 Mbps；③ 差值 = 13.4 Mbps（CELL_B 92.3 - CELL_C 78.9）
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q003  L1-基础  [条件判断]  status=success  confidence=0.93
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : rule_evaluator  question_parser
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'SINR', 'MAJOR...  metric_values=['85%', '-100 dBm', '0 dB', '3...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['rule_evaluator', 'question_p...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=['阈值规则：掉话率 > 3%', '阈值规则：掉话率=2....  triggered_rules=['掉话率阈值规则']
+│    Step 4 [[placeholder: expected_answer]] 生成答案 → 触发规则A（MAJOR告警）。原因：PRB_UL=88%>85% 且持续15分钟>10分钟，满足规则A；RSRP=-98...
+│  最终答案   : 触发规则A（MAJOR告警）。原因：PRB_UL=88%>85% 且持续15分钟>10分钟，满足规则A；RSRP=-98未低于-100，规则B不触发；掉话率2.5%未超3%，规则C...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q004  L1-基础  [JSON格式转换]  status=success  confidence=0.90
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : question_parser  answer_formatter
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['小区', '天线', '下倾角', '方位角', '转换...  metric_values=[]
+│    Step 2 [tool_router] 工具路由 → selected_tools=['question_parser', 'answer_fo...
+│    Step 3 [[placeholder: expected_answer]] 生成答案 → {"cell_id": "CELL_SH_108", "city": "上海市", "district": "静安区",...
+│  最终答案   : {"cell_id": "CELL_SH_108", "city": "上海市", "district": "静安区", "longitude": 121.4356, "latit...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q005  L1-基础  [表格排序]  status=success  confidence=0.90
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : calculator_tool
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['RSRP', '小区', 'CELL_003', 'CE...  metric_values=[]
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool']
+│    Step 3 [[placeholder: expected_answer]] 生成答案 → 排序结果（信号最差→最好）：
+1. CELL_005：-102 dBm
+2. CELL_002：-95 dBm
+3. C...
+│  最终答案   : 排序结果（信号最差→最好）：
+1. CELL_005：-102 dBm
+2. CELL_002：-95 dBm
+3. CELL_003：-88 dBm
+4. CELL_004：-8...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q006  L1-基础  [通信常识问答]  status=success  confidence=0.90
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : (无)
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'NR', '5G', 'PRB利用率', ...  metric_values=['30kHz', '100MHz', '85%']
+│    Step 2 [tool_router] 工具路由 → selected_tools=[]
+│    Step 3 [[placeholder: expected_answer]] 生成答案 → ① PRB由频域上12个连续子载波组成，时域上占1个时隙（14个OFDM符号）。② 100MHz带宽、30kHz子载波间...
+│  最终答案   : ① PRB由频域上12个连续子载波组成，时域上占1个时隙（14个OFDM符号）。② 100MHz带宽、30kHz子载波间隔的5G NR小区可用PRB数量为273个（3GPP TS ...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q007  L1-基础  [材料问答]  status=success  confidence=0.90
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : calculator_tool
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['切换成功率', '掉话率', '邻区', '宏站', '...  metric_values=['91.3%', '2.8%', '15.2条', '97...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool']
+│    Step 3 [[placeholder: expected_answer]] 生成答案 → ① 切换成功率提升了6.3个百分点（91.3%→97.6%）；② 掉话率降低了1.9个百分点（2.8%→0.9%）；③ ...
+│  最终答案   : ① 切换成功率提升了6.3个百分点（91.3%→97.6%）；② 掉话率降低了1.9个百分点（2.8%→0.9%）；③ 用户投诉日均减少了12.1条（15.2→3.1条）。
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q008  L2-进阶  [多跳问答]  status=success  confidence=0.88
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : rule_evaluator  trace_recorder  question_parser  answer_verifier
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'SINR', 'CIO',...  metric_values=['93%', '9 dB', '72%', '-82 dB...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['rule_evaluator', 'trace_reco...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=['多级阈值判断：测试值 93.0%，触发级别「告警」（阈值...  triggered_rules=['告警', '切换成功率阈值规则']
+│    Step 4 [[placeholder: expected_answer]] 生成答案 → ① 93%低于95%阈值，触发【告警】级别（未达90%严重级别）。② CIO已于历史工单中修复，当前告警类型为neigh...
+│  最终答案   : ① 93%低于95%阈值，触发【告警】级别（未达90%严重级别）。② CIO已于历史工单中修复，当前告警类型为neighbor_relation_abnormal，最可能根因是邻区...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q009  L2-进阶  [数据与规则综合]  status=success  confidence=0.88
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : rule_evaluator  calculator_tool  trace_recorder  answer_verifier
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'SINR', 'KPI',...  metric_values=['85%', '3%', '95%', '-85 dBm'...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['rule_evaluator', 'calculator...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=['连续拥塞规则：PRB_UL > 85% 且持续 ≥ 2 ...  triggered_rules=['上行PRB连续拥塞规则', '掉话率阈值规则', '切换...
+│    Step 4 [[placeholder: expected_answer]] 生成答案 → ① 辅助规则触发：RSRP全程在-80~-82 dBm（均>-85），SINR全程在6~11 dB（均>5），排除覆盖和...
+│  最终答案   : ① 辅助规则触发：RSRP全程在-80~-82 dBm（均>-85），SINR全程在6~11 dB（均>5），排除覆盖和干扰原因。② 规则1：T4（86%）起PRB_UL>85%，...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q010  L3-挑战  [复杂规划]  status=success  confidence=0.80
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [fallback]
+│  用到工具   : rule_evaluator  calculator_tool  task_planner  question_parser  trace_recorder  answer_formatter  …+1项
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'DAS', '上行PRB'...  metric_values=['3.2倍', '91%', '75%', '45%', ...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['rule_evaluator', 'calculator...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=[]  triggered_rules=[]
+│    Step 4 [[placeholder: expected_answer]] 生成答案 → 【阶段一：4月28日（今日）】
+任务：①立即申请CELL_CBD_003/007天线参数调整及DAS_02信源调整的高空...
+│  最终答案   : 【阶段一：4月28日（今日）】
+任务：①立即申请CELL_CBD_003/007天线参数调整及DAS_02信源调整的高空作业许可（须在28日内提交，以确保29日上午可用）；②远程执...
+│  校验结果   : is_valid=True  score=1.00
+└────────────────────────────────────────────────────────────────────────┘
+
+
+==========================================================================
+  整体评测指标
+==========================================================================
+  总题数                 :   10
+  运行成功率               :   [████████████████████] 100.0%
+  Schema 合规率          :   [████████████████████] 100.0%
+  轨迹完整率               :   [████████████████████] 100.0%
+  工具调用率               :   [██████████████████░░] 90.0%
+  答案匹配率（本地参考）         :   [████████████████████] 100.0%
+
+  精确匹配率               :   [████████████████████] 100.0%
+  标准化匹配率              :   [████████████████████] 100.0%
+  平均语义得分              :   [███████████████████░] 95.7%
+  JSON字段覆盖率           :   [████████████████████] 100.0%
+  数值匹配率               :   [████████████████████] 100.0%
+
+  LLM答案来源率            :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+  LLM答案成功率            :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+  部分完成率               :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+
+  L1_match_rate       :   [████████████████████] 100.0%
+  L2_match_rate       :   [████████████████████] 100.0%
+  L3_match_rate       :   [████████████████████] 100.0%
+
+  ⚠  answer_match_rate = 1.0 属预期行为（当前 pipeline 使用 expected_answer 占位）。
+==========================================================================
+

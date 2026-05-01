@@ -1,0 +1,62 @@
+{
+  "total_items": 3,
+  "completed": 3,
+  "failures": 0,
+  "exact_match_accuracy": 0.6667,
+  "total_tokens": 1131010,
+  "avg_tokens": 377003.33,
+  "std_tokens": 379130.49,
+  "input_tokens": 1115709,
+  "output_tokens": 15301,
+  "avg_input_tokens": 371903,
+  "avg_output_tokens": 5100.33,
+  "avg_actor_tokens": 373396.67,
+  "avg_planner_tokens": 3606.67,
+  "avg_actor_prompt_chars": 35835.72,
+  "avg_actor_prompt_est_tokens": 8958.6,
+  "avg_current_step_chars": 104.7,
+  "avg_dependency_context_chars": 218.41,
+  "avg_recent_context_chars": 4.0,
+  "avg_compact_plan_overview_chars": 460.22,
+  "avg_key_values_chars": 12.4,
+  "avg_artifact_refs_chars": 249.42,
+  "avg_tool_calls": 15.67,
+  "avg_elapsed_seconds": 97.52,
+  "min_tokens": 80924,
+  "max_tokens": 912164,
+  "top_token_tasks": [
+    {
+      "task_id": "cffe0e32-c9a6-4c52-9877-78ceb4aaa9fb",
+      "total_tokens": 912164,
+      "input_tokens": 903331,
+      "output_tokens": 8833,
+      "actor_tokens": 908379,
+      "planner_tokens": 3785,
+      "tool_calls": 31,
+      "steps_count": 4,
+      "exact_match": true
+    },
+    {
+      "task_id": "8e867cd7-cff9-4e6c-867a-ff5ddc2550be",
+      "total_tokens": 137922,
+      "input_tokens": 134284,
+      "output_tokens": 3638,
+      "actor_tokens": 134527,
+      "planner_tokens": 3395,
+      "tool_calls": 9,
+      "steps_count": 3,
+      "exact_match": true
+    },
+    {
+      "task_id": "7d4a7d1d-cac6-44a8-96e8-ea9584a70825",
+      "total_tokens": 80924,
+      "input_tokens": 78094,
+      "output_tokens": 2830,
+      "actor_tokens": 77284,
+      "planner_tokens": 3640,
+      "tool_calls": 7,
+      "steps_count": 3,
+      "exact_match": false
+    }
+  ]
+}

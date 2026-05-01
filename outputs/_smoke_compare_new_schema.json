@@ -1,0 +1,53 @@
+{
+  "num_tasks": 0,
+  "baseline": {
+    "accuracy": 0.0,
+    "avg_total_tokens": 0.0,
+    "avg_input_tokens": 0.0,
+    "avg_output_tokens": 0.0,
+    "avg_actor_tokens": 0.0,
+    "avg_planner_tokens": 0.0,
+    "avg_actor_prompt_chars": 0.0,
+    "avg_actor_prompt_est_tokens": 0.0,
+    "avg_current_step_chars": 0.0,
+    "avg_dependency_context_chars": 0.0,
+    "avg_recent_context_chars": 0.0,
+    "avg_compact_plan_overview_chars": 0.0,
+    "avg_key_values_chars": 0.0,
+    "avg_artifact_refs_chars": 0.0,
+    "avg_tool_calls": 0.0,
+    "avg_elapsed_seconds": 0.0
+  },
+  "optimized": {
+    "accuracy": 0.0,
+    "avg_total_tokens": 0.0,
+    "avg_input_tokens": 0.0,
+    "avg_output_tokens": 0.0,
+    "avg_actor_tokens": 0.0,
+    "avg_planner_tokens": 0.0,
+    "avg_actor_prompt_chars": 0.0,
+    "avg_actor_prompt_est_tokens": 0.0,
+    "avg_current_step_chars": 0.0,
+    "avg_dependency_context_chars": 0.0,
+    "avg_recent_context_chars": 0.0,
+    "avg_compact_plan_overview_chars": 0.0,
+    "avg_key_values_chars": 0.0,
+    "avg_artifact_refs_chars": 0.0,
+    "avg_tool_calls": 0.0,
+    "avg_elapsed_seconds": 0.0
+  },
+  "delta": {
+    "accuracy_change": 0.0,
+    "total_tokens_change_pct": null,
+    "input_tokens_change_pct": null,
+    "prompt_chars_change_pct": null,
+    "tool_calls_change_pct": null,
+    "latency_change_pct": null,
+    "avg_total_tokens_change_pct": null,
+    "avg_input_tokens_change_pct": null,
+    "avg_actor_prompt_chars_change_pct": null,
+    "avg_tool_calls_change_pct": null,
+    "avg_elapsed_seconds_change_pct": null
+  },
+  "per_task": []
+}

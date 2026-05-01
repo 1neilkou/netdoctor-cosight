@@ -233,14 +233,56 @@ sys.modules.setdefault("app.cosight.tool.search_util", search_util_stub)
 scrape_tool_stub = types.ModuleType("app.cosight.tool.scrape_website_toolkit")
 
 
-def _dummy_fetch_website_content(*args, **kwargs):
-    # Fail clearly if webpage fetch is actually invoked.
-    raise RuntimeError("fetch_website_content is stubbed in test_single.py")
+def _fetch_website_content(url=None, website_url=None, **kwargs):
+    import requests
+    from bs4 import BeautifulSoup
+
+    target_url = website_url or url
+    if not target_url:
+        return "fetch failed: missing url"
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(target_url, headers=headers, timeout=15, verify=False)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer"]):
+            tag.decompose()
+        text = soup.get_text(separator="\n", strip=True)
+        return text[:8000]
+    except Exception as e:
+        return f"fetch failed: {e}"
 
 
-scrape_tool_stub.fetch_website_content = _dummy_fetch_website_content
-scrape_tool_stub.fetch_website_content_with_images = _dummy_fetch_website_content
-scrape_tool_stub.fetch_website_images_only = _dummy_fetch_website_content
+def _fetch_website_content_with_images(url=None, website_url=None, **kwargs):
+    text = _fetch_website_content(url=url, website_url=website_url, **kwargs)
+    return {
+        "text_content": text,
+        "images": [],
+        "background_images": [],
+        "total_images": 0,
+        "url": website_url or url,
+        "status": "error" if str(text).lower().startswith("fetch failed") else "success",
+    }
+
+
+def _fetch_website_images_only(url=None, website_url=None, **kwargs):
+    return {
+        "images": [],
+        "background_images": [],
+        "total_images": 0,
+        "url": website_url or url,
+        "status": "success",
+    }
+
+
+def _is_valid_url(url: str) -> bool:
+    return isinstance(url, str) and url.startswith(("http://", "https://"))
+
+
+scrape_tool_stub.fetch_website_content = _fetch_website_content
+scrape_tool_stub.fetch_website_content_with_images = _fetch_website_content_with_images
+scrape_tool_stub.fetch_website_images_only = _fetch_website_images_only
+scrape_tool_stub.is_valid_url = _is_valid_url
 sys.modules.setdefault("app.cosight.tool.scrape_website_toolkit", scrape_tool_stub)
 
 html_tool_stub = types.ModuleType("app.cosight.tool.html_visualization_toolkit")

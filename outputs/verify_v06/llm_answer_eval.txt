@@ -1,0 +1,219 @@
+
+==========================================================================
+  区域赛 Contest Solver — Pipeline Demo
+  共 10 道题  |  L1-基础: 7 道  L2-进阶: 2 道  L3-挑战: 1 道
+  语义解析：LLM 语义解析  |  答案生成：LLM 答案生成
+==========================================================================
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q001  L1-基础  [文本信息抽取]  status=success  confidence=0.95
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : question_parser  rule_evaluator  answer_formatter
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'MAJOR', 'PRB利用率', '上行...  metric_values=['93.5%']
+│    Step 2 [tool_router] 工具路由 → selected_tools=['question_parser', 'rule_eval...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=[]  triggered_rules=[]
+│    Step 4 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.95
+│  最终答案   : {"cell_id": "CELL_NJ_042", "alarm_time": "2026-04-28 09:15:32", "prb_usage_ul": "93.5%", "...
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : json_field_coverage  精确=✗  标准化=✓  语义得分=0.857
+│  命中要点   : cell_id  alarm_time  duration_min  online_users  severity  …+1项
+│  缺失要点   : prb_usage_ul(期望=93.5, 实际=93.5%)
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q002  L1-基础  [简单计算]  status=success  confidence=0.95
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : calculator_tool
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['下行吞吐量', '小区', '基站', 'CELL_A'...  metric_values=['85.6 Mbps', '92.3 Mbps', '78...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool']
+│    Step 3 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.95
+│  最终答案   : ① 256.8 Mbps ② 85.60 Mbps ③ 13.4 Mbps
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : numeric_match  精确=✗  标准化=✗  语义得分=0.600
+│  命中要点   : 256.8  85.6  13.4
+│  缺失要点   : 92.3  78.9
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q003  L1-基础  [条件判断]  status=success  confidence=1.00
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : question_parser  rule_evaluator
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'SINR', 'MAJOR...  metric_values=['85%', '-100 dBm', '0 dB', '3...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['question_parser', 'rule_eval...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=['阈值规则：掉话率 > 3%', '阈值规则：掉话率=2....  triggered_rules=['掉话率阈值规则']
+│    Step 4 [llm_answerer] 生成答案 → answer_source=llm  confidence=1.0
+│  最终答案   : 不触发告警
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : keyword_coverage  精确=✗  标准化=✗  语义得分=0.000
+│  缺失要点   : 规则A  规则B  规则C  MAJOR
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q004  L1-基础  [JSON格式转换]  status=success  confidence=0.95
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : question_parser  answer_formatter
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['小区', '天线', '下倾角', '方位角', '转换...  metric_values=[]
+│    Step 2 [tool_router] 工具路由 → selected_tools=['question_parser', 'answer_fo...
+│    Step 3 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.95
+│  最终答案   : {"cell_id":"CELL_SH_108","city":"上海市","district":"静安区","longitude":121.4356,"latitude":31....
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : json_field_coverage  精确=✗  标准化=✓  语义得分=1.000
+│  命中要点   : cell_id  city  district  longitude  latitude  …+4项
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q005  L1-基础  [表格排序]  status=success  confidence=1.00
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : calculator_tool
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['RSRP', '小区', 'CELL_003', 'CE...  metric_values=[]
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool']
+│    Step 3 [llm_answerer] 生成答案 → answer_source=llm  confidence=1.0
+│  最终答案   : CELL_005(-102), CELL_002(-95), CELL_003(-88), CELL_004(-81), CELL_001(-76)
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : numeric_match  精确=✗  标准化=✗  语义得分=0.667
+│  命中要点   : 1.0  5.0  -102.0  2.0  -95.0  …+5项
+│  缺失要点   : 2.0  3.0  4.0  5.0  1.0
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q006  L1-基础  [通信常识问答]  status=success  confidence=0.95
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : calculator_tool  rule_evaluator
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'NR', '5G', 'PRB利用率', ...  metric_values=['30kHz', '100MHz', '85%']
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool', 'rule_eval...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=[]  triggered_rules=[]
+│    Step 4 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.95
+│  最终答案   : ① 12个子载波；② 273个；③ 上行时延增加、用户速率下降、丢包率上升
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : token_overlap  精确=✗  标准化=✗  语义得分=0.100
+│  命中要点   : 12  273
+│  缺失要点   : 100mhz  14  30khz  38.101  3gpp  …+5项
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q007  L1-基础  [材料问答]  status=success  confidence=0.95
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : calculator_tool  question_parser  answer_formatter
+│  解题轨迹   : （共 3 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['切换成功率', '掉话率', '邻区', '宏站', '...  metric_values=['91.3%', '2.8%', '15.2条', '97...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool', 'question_...
+│    Step 3 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.95
+│  最终答案   : 6.3个百分点；1.9个百分点；12.1条
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : numeric_match  精确=✗  标准化=✗  语义得分=0.333
+│  命中要点   : 6.3  1.9  12.1
+│  缺失要点   : 91.3  97.6  2.8  0.9  15.2  …+1项
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q008  L2-进阶  [多跳问答]  status=success  confidence=0.85
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : question_parser  rule_evaluator  task_planner  answer_formatter  trace_recorder  answer_verifier
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'SINR', 'CIO',...  metric_values=['93%', '9 dB', '72%', '-82 dB...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['question_parser', 'rule_eval...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=['多级阈值判断：测试值 93.0%，触发级别「告警」（阈值...  triggered_rules=['告警', '切换成功率阈值规则']
+│    Step 4 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.85
+│  最终答案   : ① 告警级别：告警。
+② 最可能的根因：邻区关系异常（neighbor_relation_abnormal）导致切换成功率下降。
+③ 排查方向：1. 邻区配置参数（如CIO、A3偏...
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : keyword_coverage  精确=✗  标准化=✗  语义得分=0.000
+│  缺失要点   : CELL_P  CELL_Q
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q009  L2-进阶  [数据与规则综合]  status=success  confidence=0.95
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : calculator_tool  rule_evaluator  answer_formatter  trace_recorder  answer_verifier
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'SINR', 'KPI',...  metric_values=['85%', '3%', '95%', '-85 dBm'...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['calculator_tool', 'rule_eval...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=['连续拥塞规则：PRB_UL > 85% 且持续 ≥ 2 ...  triggered_rules=['上行PRB连续拥塞规则', '掉话率阈值规则', '切换...
+│    Step 4 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.95
+│  最终答案   : ① 是；② 规则1在T4-T6触发，规则2在T5-T6触发，规则3在T5-T6触发；③ 根因为上行拥塞导致掉话和切换异常，优先处置上行扩容或负载均衡。
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : keyword_coverage  精确=✗  标准化=✓  语义得分=1.000
+│  命中要点   : 规则1  规则2  规则3  T4  T5
+└────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│  ✓ Q010  L3-挑战  [复杂规划]  status=success  confidence=0.90
+├────────────────────────────────────────────────────────────────────────┤
+│  语义解析   : [LLM]
+│  答案来源   : [LLM]
+│  LLM诊断  : http_status=200  json_parse=True  fallback_reason=None
+│  用到工具   : question_parser  task_planner  rule_evaluator  answer_formatter  trace_recorder  answer_verifier
+│  解题轨迹   : （共 4 步）
+│    Step 1 [question_parser] 解析题目 → keywords_top5=['PRB', 'RSRP', 'DAS', '上行PRB'...  metric_values=['3.2倍', '91%', '75%', '45%', ...
+│    Step 2 [tool_router] 工具路由 → selected_tools=['question_parser', 'task_plan...
+│    Step 3 [rule_evaluator] 规则评估 → rule_findings=[]  triggered_rules=[]
+│    Step 4 [llm_answerer] 生成答案 → answer_source=llm  confidence=0.9
+│  最终答案   : 【阶段一：问题诊断与准备（4月28日）】
+- 任务：确认CELL_CBD_003/007上行PRB高原因，核查CELL_CBD_005/006邻区漏配，测试DAS_02覆盖；申请4...
+│  校验结果   : is_valid=True  score=1.00
+│  评测方法   : plan_coverage  精确=✗  标准化=✓  语义得分=0.500
+│  缺失要点   : 识别三个当前问题及约束条件  推导时间约束：天线许可须在4月28日申请（24小时后即4月2  区分远程操作任务（邻区配置）与现场任务（天线/DAS调整）  按时间轴排列各阶段任务  为每阶段分配负责角色  …+2项
+└────────────────────────────────────────────────────────────────────────┘
+
+
+==========================================================================
+  整体评测指标
+==========================================================================
+  总题数                 :   10
+  运行成功率               :   [████████████████████] 100.0%
+  Schema 合规率          :   [████████████████████] 100.0%
+  轨迹完整率               :   [████████████████████] 100.0%
+  工具调用率               :   [████████████████████] 100.0%
+  答案匹配率（本地参考）         :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+
+  精确匹配率               :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+  标准化匹配率              :   [████████░░░░░░░░░░░░] 40.0%
+  平均语义得分              :   [██████████░░░░░░░░░░] 50.6%
+  JSON字段覆盖率           :   [██████████████████░░] 92.8%
+  数值匹配率               :   [██████████░░░░░░░░░░] 53.3%
+
+  LLM答案来源率            :   [████████████████████] 100.0%
+  LLM答案成功率            :   [████████████████████] 100.0%
+  部分完成率               :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+
+  L1_match_rate       :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+  L2_match_rate       :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+  L3_match_rate       :   [░░░░░░░░░░░░░░░░░░░░] 0.0%
+
+  ⚠  LLM 答案模式：10/10 题由 LLM 生成答案，answer_match_rate 反映 LLM 答案与参考答案的完全匹配率，仅供本地参考。
+==========================================================================
+

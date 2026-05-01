@@ -1,0 +1,106 @@
+{
+  "total_items": 3,
+  "completed": 3,
+  "failures": 0,
+  "exact_match_accuracy": 0.3333,
+  "accuracy_overall": 0.3333,
+  "accuracy_L1": 0.3333,
+  "accuracy_L2": 0.0,
+  "accuracy_L3": 0.0,
+  "total_tokens": 710306,
+  "avg_tokens": 236768.67,
+  "avg_total_tokens": 236768.67,
+  "std_tokens": 33272.51,
+  "input_tokens": 694296,
+  "output_tokens": 16010,
+  "avg_input_tokens": 231432,
+  "avg_output_tokens": 5336.67,
+  "avg_actor_tokens": 231677.33,
+  "avg_planner_tokens": 5091.33,
+  "avg_actor_prompt_chars": 31886.0,
+  "avg_actor_prompt_est_tokens": 7971.08,
+  "avg_current_step_chars": 125.16,
+  "avg_dependency_context_chars": 124.22,
+  "avg_recent_context_chars": 0.0,
+  "avg_compact_plan_overview_chars": 476.24,
+  "avg_key_values_chars": 124.22,
+  "avg_artifact_refs_chars": 366.42,
+  "avg_facts_count": 6,
+  "avg_blockers_count": 0,
+  "avg_tool_calls": 10.33,
+  "avg_tool_call_count": 10.33,
+  "blocked_error_rate": 0.0,
+  "multi_hop_accuracy": 0.0,
+  "avg_replan_count": 0.33,
+  "prune_trigger_rate": 0.0,
+  "avg_verify_steps_added": 0.67,
+  "avg_steps_executed": 3,
+  "avg_steps_skipped": 0.67,
+  "avg_step_confidence": 0.7,
+  "avg_final_answer_confidence": 0.0,
+  "confidence_calibration": [
+    {
+      "range": "[0.5, 0.6)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.6, 0.7)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.7, 0.8)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.8, 0.9)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.9, 1.0)",
+      "count": 0,
+      "accuracy": 0.0
+    }
+  ],
+  "avg_elapsed_seconds": 68.2,
+  "min_tokens": 195524,
+  "max_tokens": 277006,
+  "top_token_tasks": [
+    {
+      "task_id": "cffe0e32-c9a6-4c52-9877-78ceb4aaa9fb",
+      "total_tokens": 277006,
+      "input_tokens": 271823,
+      "output_tokens": 5183,
+      "actor_tokens": 269202,
+      "planner_tokens": 7804,
+      "tool_calls": 5,
+      "steps_count": 4,
+      "exact_match": false
+    },
+    {
+      "task_id": "8e867cd7-cff9-4e6c-867a-ff5ddc2550be",
+      "total_tokens": 237776,
+      "input_tokens": 232168,
+      "output_tokens": 5608,
+      "actor_tokens": 234032,
+      "planner_tokens": 3744,
+      "tool_calls": 15,
+      "steps_count": 4,
+      "exact_match": true
+    },
+    {
+      "task_id": "7d4a7d1d-cac6-44a8-96e8-ea9584a70825",
+      "total_tokens": 195524,
+      "input_tokens": 190305,
+      "output_tokens": 5219,
+      "actor_tokens": 191798,
+      "planner_tokens": 3726,
+      "tool_calls": 11,
+      "steps_count": 3,
+      "exact_match": false
+    }
+  ]
+}

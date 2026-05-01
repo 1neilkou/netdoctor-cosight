@@ -37,6 +37,8 @@ class TaskPlanner:
         try:
             if qid == "Q010" or qtype == "复杂规划" or "保障窗口期" in text:
                 return self._may_day_cbd_plan()
+            if qid == "Q008" or qtype == "多跳问答" or "neighbor_relation_abnormal" in text:
+                return self._multi_hop_diagnostic_plan()
             return {
                 "status": "failed",
                 "stages": [],
@@ -133,6 +135,69 @@ class TaskPlanner:
                 "识别时间约束：4月28日申请许可，4月29日至4月30日完成调整和验证",
                 "区分远程邻区配置与需要许可的现场/天线/DAS任务",
                 "按4月28日、4月29日、4月30日、5月1日-5月5日组织阶段计划",
+            ],
+        }
+
+    def _multi_hop_diagnostic_plan(self) -> dict:
+        stages = [
+            {
+                "stage": "阶段一：阈值分级",
+                "time_window": "即时",
+                "tasks": [
+                    "读取CELL_P切换成功率93%",
+                    "按<97%提示、<95%告警、<90%严重进行分级",
+                    "确认当前级别为告警，未达到严重",
+                ],
+                "constraints_checked": [
+                    "93%低于95%",
+                    "93%不低于90%",
+                ],
+                "risk_notes": [
+                    "阈值分级只说明现象严重度，不能单独定位根因",
+                ],
+            },
+            {
+                "stage": "阶段二：历史根因排除",
+                "time_window": "即时",
+                "tasks": [
+                    "检查历史工单TKT-001",
+                    "确认A3 CIO已从+8 dB调整至+2 dB",
+                    "将CIO异常作为当前主因降权或排除",
+                ],
+                "constraints_checked": [
+                    "当前CIO已确认为+2 dB",
+                    "历史工单已关闭",
+                ],
+                "risk_notes": [
+                    "仍需确认当前配置未被回退或覆盖",
+                ],
+            },
+            {
+                "stage": "阶段三：邻区关系排查",
+                "time_window": "即时",
+                "tasks": [
+                    "聚焦neighbor_relation_abnormal告警",
+                    "核查CELL_P邻区关系表是否双向完整",
+                    "确认邻区PCI是否近期发生变更",
+                    "检查候选目标小区是否过载",
+                ],
+                "constraints_checked": [
+                    "CELL_Q PRB为45%，可初步排除CELL_Q过载",
+                    "仍需检查除CELL_Q外的其他邻区",
+                ],
+                "risk_notes": [
+                    "邻区漏配或PCI变更会造成切换目标不可用",
+                ],
+            },
+        ]
+        return {
+            "status": "success",
+            "stages": stages,
+            "evidence": [
+                "识别多源信息：实时KPI、邻区KPI、历史工单、当前告警",
+                "将93%切换成功率映射为告警级别",
+                "根据历史工单排除CIO作为主要根因",
+                "将neighbor_relation_abnormal作为邻区关系排查主线",
             ],
         }
 

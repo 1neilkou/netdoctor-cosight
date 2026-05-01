@@ -167,16 +167,8 @@ class TaskActorAgent(BaseAgent):
         is_chinese = bool(re.search(r'[\u4e00-\u9fff]', self.question)) if self.question else True
         experiment_mode = os.environ.get("COSIGHT_EXPERIMENT_MODE", "baseline").strip().lower()
         if experiment_mode == "optimized":
-            actor_view = build_actor_view(
-                self.plan,
-                step_index,
-                max_recent_steps=_env_int("COSIGHT_MAX_RECENT_STEPS", 1),
-                max_summary_chars=_env_int("COSIGHT_MAX_SUMMARY_CHARS", 500),
-                max_recent_chars=_env_int("COSIGHT_MAX_RECENT_CHARS", 300),
-                include_compact_overview=not _env_bool("COSIGHT_DISABLE_COMPACT_OVERVIEW"),
-                include_key_values=not _env_bool("COSIGHT_DISABLE_KEY_VALUES"),
-                include_artifact_refs=not _env_bool("COSIGHT_DISABLE_ARTIFACT_REFS"),
-            )
+            actor_view = build_actor_view(self.plan, step_index)
+            actor_view["_fact_store_enabled"] = _env_bool("COSIGHT_ENABLE_FACT_STORE")
             task_prompt = actor_execute_task_prompt_v2(question, step_index, actor_view, self.work_space_path)
             if not hasattr(self.plan, "actor_prompt_breakdown_templates"):
                 self.plan.actor_prompt_breakdown_templates = {}

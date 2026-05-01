@@ -299,48 +299,46 @@ def actor_execute_task_prompt_v2(task: str, step_index: int, actor_view: dict, w
     view = actor_view or {}
     sections = {
         "question": str(task or ""),
-        "current_step": _compact_json(
-            {
-                "step_index": view.get("current_step_index", step_index),
-                "step": view.get("current_step", ""),
-            }
-        ),
-        "dependency_summaries": _compact_json(view.get("dependency_summaries", [])),
-        "compact_plan_overview": _compact_json(view.get("compact_plan_overview", [])),
-        "recent_completed_summaries": _compact_json(view.get("recent_completed_summaries", [])),
-        "failed_or_blocked_steps": _compact_json(view.get("failed_or_blocked_steps", [])),
+        "current_step": _compact_json({
+            "step_index": step_index,
+            "step": view.get("current_step", ""),
+        }),
+        "dependency_facts": _compact_json(view.get("dependency_facts", [])),
         "artifact_refs": _compact_json(view.get("artifact_refs", [])),
-        "key_values": _compact_json(view.get("key_values", {})),
-        "tool_call_brief": _compact_json(view.get("tool_call_brief", {})),
+        "tool_summary": _compact_json(view.get("tool_summary", {})),
+        "plan_overview": _compact_json(view.get("plan_overview", [])),
         "workspace_path": workspace_path,
     }
+    fact_instruction = (
+        "5. Before mark_step, call record_facts for reusable facts, artifacts, blockers, and confidence when available.\n"
+        if view.get("_fact_store_enabled")
+        else "5. Keep reusable facts, artifacts, blockers, and confidence concise in the step result.\n"
+    )
     prompt = (
         f"Question:\n{sections['question']}\n\n"
         "Instructions:\n"
         "1. Complete only the current step.\n"
-        "2. Use dependency summaries and key values as prior context.\n"
+        "2. Use dependency facts as prior context.\n"
         "3. Do not repeat completed work.\n"
         "4. If information is insufficient, use tools.\n"
-        "5. Return a concise step result with important facts, values, and file paths.\n\n"
+        f"{fact_instruction}"
+        "6. Return a concise step result with important facts, values, and file paths.\n\n"
         f"Current step:\n{sections['current_step']}\n\n"
-        f"Dependency summaries:\n{sections['dependency_summaries']}\n\n"
-        f"Compact plan overview:\n{sections['compact_plan_overview']}\n\n"
-        f"Recent completed summaries:\n{sections['recent_completed_summaries']}\n\n"
-        f"Failed or blocked steps:\n{sections['failed_or_blocked_steps']}\n\n"
+        f"Dependency facts:\n{sections['dependency_facts']}\n\n"
         f"Artifact refs:\n{sections['artifact_refs']}\n\n"
-        f"Key values:\n{sections['key_values']}\n\n"
-        f"Tool call brief:\n{sections['tool_call_brief']}\n\n"
+        f"Tool summary:\n{sections['tool_summary']}\n\n"
+        f"Plan overview:\n{sections['plan_overview']}\n\n"
         f"Workspace path:\n{sections['workspace_path']}\n"
     )
     if isinstance(actor_view, dict):
         actor_view["_prompt_breakdown"] = {
             "current_step_chars": len(sections["current_step"]),
-            "dependency_context_chars": len(sections["dependency_summaries"]),
-            "recent_context_chars": len(sections["recent_completed_summaries"]),
-            "compact_plan_overview_chars": len(sections["compact_plan_overview"]),
-            "failed_context_chars": len(sections["failed_or_blocked_steps"]),
+            "dependency_context_chars": len(sections["dependency_facts"]),
+            "recent_context_chars": 0,
+            "compact_plan_overview_chars": len(sections["plan_overview"]),
+            "failed_context_chars": 0,
             "artifact_refs_chars": len(sections["artifact_refs"]),
-            "key_values_chars": len(sections["key_values"]),
+            "key_values_chars": len(sections["dependency_facts"]),
             "final_prompt_chars": len(prompt),
             "final_prompt_est_tokens": len(prompt) // 4,
         }

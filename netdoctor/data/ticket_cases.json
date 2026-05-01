@@ -1,0 +1,174 @@
+[
+  {
+    "case_id": "TKT-2025-0041",
+    "problem_description": "Area_B 热点区域用户大量投诉上行速率极慢，无法正常使用视频会议",
+    "symptoms": [
+      "上行吞吐量从正常 18 Mbps 下降至 1 Mbps 以下",
+      "上行 PRB 利用率长期维持在 95%~100%",
+      "投诉用户集中于 CELL_004 和 CELL_005 覆盖范围",
+      "下行速率基本正常，用户反映下载没问题但上传极慢"
+    ],
+    "root_cause": "上午 9:00 至 11:00 高峰期该区域举办大型活动，话务量激增导致上行 PRB 资源耗尽，上行容量饱和",
+    "solution": "临时：启用上行调度优先级策略，限制单用户最大 PRB 占用比；长期：评估新增室内分布系统或加密站点以分担热点容量",
+    "evidence_patterns": [
+      "prb_usage_ul > 90 持续 > 15min",
+      "ul_throughput_mbps < 3",
+      "user_complaints > 10 per interval"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0067",
+    "problem_description": "Area_E 多名用户反映信号差、网速慢，部分用户频繁断网",
+    "symptoms": [
+      "RSRP 低于 -99 dBm，SINR 低于 0 dB",
+      "下行吞吐量不足 15 Mbps，上行不足 3 Mbps",
+      "掉话率超过 4%",
+      "切换成功率低于 85%"
+    ],
+    "root_cause": "CELL_009 和 CELL_010 位于地下车库出入口，存在严重覆盖空洞，加之与地面宏站产生同频干扰，SINR 持续恶化",
+    "solution": "调整 CELL_009/010 天线下倾角由 8° 改为 6°，增加发射功率 2 dB；对邻区频点进行异频规划，消除同频干扰；后续评估补充 Pico 站覆盖盲区",
+    "evidence_patterns": [
+      "rsrp < -98",
+      "sinr < 1",
+      "drop_rate > 3.5"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0089",
+    "problem_description": "Area_C 用户反映移动过程中频繁掉线，静止时基本正常",
+    "symptoms": [
+      "切换成功率持续下降，最低至 78%",
+      "乒乓切换比率升高",
+      "用户移动时掉话率显著高于静止态",
+      "SINR 边缘区域 5~8 dB"
+    ],
+    "root_cause": "CELL_006 与邻区 CELL_007 之间邻区关系表缺少双向配置，且 A3 切换事件偏移量（CIO）设置过大（+6 dB），导致切换触发延迟，用户离开服务区后才触发切换，切换失败",
+    "solution": "在 SON 系统中补充 CELL_006 <-> CELL_007 双向邻区关系；将 CELL_006 的 A3 CIO 由 +6 dB 调整为 +2 dB；观察切换成功率恢复情况",
+    "evidence_patterns": [
+      "handover_success_rate < 88",
+      "drop_rate > 2.0",
+      "sinr 5~10 且有下降趋势"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0112",
+    "problem_description": "Area_H 某小区覆盖质量在 2 小时内急速劣化，大量用户无法接入",
+    "symptoms": [
+      "RSRP 在 30 分钟内从 -78 dBm 跌至 -100 dBm",
+      "SINR 从 11 dB 跌至 -2 dB",
+      "切换成功率跌至 84%",
+      "告警日志出现 hardware_warning"
+    ],
+    "root_cause": "现场排查发现 CELL_016 的 RRU 模块散热风扇故障，导致功放过热保护降额输出，发射功率降低约 6 dB，覆盖范围骤降",
+    "solution": "更换 RRU 散热风扇，确认功放输出功率恢复正常后，验证 RSRP 和 SINR 指标；通知周边邻区临时提升发射功率 2 dB 以弥补覆盖空洞",
+    "evidence_patterns": [
+      "rsrp 短时下降 > 15 dBm",
+      "sinr < 0",
+      "alarm_type = hardware_warning"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0134",
+    "problem_description": "Area_F 高峰期上行拥塞，用户反映微信语音、视频会议卡顿严重",
+    "symptoms": [
+      "上行 PRB 利用率 94%~100%",
+      "上行吞吐量低于 2 Mbps",
+      "用户投诉集中在工作日 9:00-11:00 和 14:00-17:00",
+      "下行 PRB 利用率正常（60%~68%）"
+    ],
+    "root_cause": "该区域为写字楼密集区，上班高峰期大量用户同时使用即时通讯和企业协作工具，上行话务模型与下行不对称，上行容量成为瓶颈",
+    "solution": "调整 TDD 帧结构，将上下行时隙比由 1:3 改为 2:2（需全网协调评估）；短期启用上行压缩调度；中期规划 C-RAN 池化方案",
+    "evidence_patterns": [
+      "prb_usage_ul > 90",
+      "prb_usage_dl < 70",
+      "ul_throughput_mbps < 2.5",
+      "时段规律性拥塞"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0158",
+    "problem_description": "CELL_003 区域用户投诉严重，信号格数显示满格但网速极慢",
+    "symptoms": [
+      "RSRP -102 dBm，SINR -2.3 dB",
+      "下行吞吐量 10 Mbps 左右但波动大",
+      "重传率高",
+      "手机信号格数由驻留频点决定，显示满格但实际质量极差"
+    ],
+    "root_cause": "附近新开业购物中心的 WiFi 无线 AP 使用了与 B3 频段部分重叠的非授权频段，产生强干扰；同时 CELL_003 与相邻高楼楼顶站产生越区覆盖叠加同频干扰",
+    "solution": "协调购物中心将 WiFi AP 频段调整至 5 GHz 频段；对 CELL_003 进行天线下倾角调整（由 4° 改为 8°）以减少越区覆盖；重新规划与邻区的频率复用方案",
+    "evidence_patterns": [
+      "rsrp < -100",
+      "sinr < 0",
+      "高重传率",
+      "干扰源定位为外部设备"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0173",
+    "problem_description": "Area_D CELL_007 周边用户投诉，下午时段网速慢且频繁断线",
+    "symptoms": [
+      "切换成功率从 97% 逐步下降至 78%",
+      "SINR 呈持续劣化趋势（15→4 dB）",
+      "上行 PRB 利用率上升至 54%（非拥塞但偏高）",
+      "传输链路误码告警"
+    ],
+    "root_cause": "传输光纤接头氧化导致接触不良，在高温天气下热胀冷缩加剧，传输链路误码率升高，导致 RLC 层重传增加、PDCP 延迟增大，间接影响切换信令的可靠性",
+    "solution": "更换老化光纤接头，清洁并重新熔接；更换后确认传输误码率回到正常阈值（< 1e-6）；监测切换成功率恢复至 97% 以上",
+    "evidence_patterns": [
+      "alarm_type = transmission_degradation",
+      "handover_success_rate 持续下降趋势",
+      "sinr 持续下降"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0195",
+    "problem_description": "凌晨低负荷时段 CELL_001 区域出现掉话投诉，非高峰时段异常",
+    "symptoms": [
+      "掉话率 0.8%~1.5%（平时 < 0.5%）",
+      "切换成功率 95%~96%（轻微下降）",
+      "无明显 KPI 拥塞特征",
+      "投诉用户均为该区域边缘漫游用户"
+    ],
+    "root_cause": "邻区 CELL_017（属于异运营商）在凌晨进行参数维护，临时修改了 PCI（物理小区标识），导致 CELL_001 的邻区列表中对应关系失效，切换目标不可达",
+    "solution": "联系邻区运营商确认 PCI 变更时间，更新 CELL_001 的邻区关系 PCI 配置；建立跨运营商邻区变更通知机制以防止复发",
+    "evidence_patterns": [
+      "切换成功率小幅下降",
+      "异运营商邻区 PCI 变更",
+      "掉话集中于边缘漫游用户"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0218",
+    "problem_description": "新开通小区 CELL_013 切换成功率偏低，用户反映驶入该区域必掉线",
+    "symptoms": [
+      "切换成功率仅 82%",
+      "但 RSRP 和 SINR 均正常（-76 dBm / 13 dB）",
+      "PRB 利用率正常",
+      "掉话均发生在进入 CELL_013 覆盖区的切换时刻"
+    ],
+    "root_cause": "CELL_013 为新建站，NetworkSlice 配置错误，切换时 QoS 映射不一致；同时目标小区的 TA（时间对齐）参数 offest 配置有误，导致切换进入后信道估计失败",
+    "solution": "修正 CELL_013 的 NetworkSlice QoS 映射表；重新配置 TA offset 参数；开启 SON ANR 功能自动优化邻区关系；切换成功率在调整后 2 小时内恢复至 98%",
+    "evidence_patterns": [
+      "新开通小区",
+      "rsrp / sinr 正常但切换成功率异常低",
+      "掉话规律性发生于切换时刻"
+    ]
+  },
+  {
+    "case_id": "TKT-2025-0241",
+    "problem_description": "Area_A 某住宅小区用户持续反映夜间网速极慢，影响追剧体验",
+    "symptoms": [
+      "22:00-24:00 时段下行吞吐量不足 20 Mbps",
+      "上行 PRB 高达 88%~96%（非典型上行拥塞时段）",
+      "RSRP 和 SINR 正常",
+      "网络侧日志显示大量上行数据上传流量"
+    ],
+    "root_cause": "该时段多名用户启用手机自动云备份（iCloud / 百度网盘），集中上传照片和视频，大量占用上行 PRB，导致下行调度受到影响（TDD 上下行资源联动）",
+    "solution": "短期：建议用户调整云备份时间至凌晨 2:00-5:00 低峰时段；网络侧：评估对云备份类业务上行速率限速策略；长期：规划站点扩容",
+    "evidence_patterns": [
+      "prb_usage_ul > 85 在非高峰时段",
+      "dl_throughput 低但 sinr / rsrp 正常",
+      "流量分析显示上行云备份特征"
+    ]
+  }
+]

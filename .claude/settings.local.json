@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/run_contest_solver_demo.py)",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

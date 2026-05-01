@@ -27,6 +27,15 @@ from app.cosight.agent.planner.instance.planner_agent_instance import create_pla
 from app.cosight.agent.planner.task_plannr_agent import TaskPlannerAgent
 from app.cosight.task.task_manager import TaskManager
 from app.cosight.task.todolist import Plan
+from app.cosight.task.fact_supervisor import (
+    SupervisorAction,
+    add_verify_step,
+    build_replan_context,
+    inspect_after_step,
+    mark_pruned_steps,
+    validate_dag,
+)
+from app.cosight.task.facts_router import route
 from app.cosight.task.time_record_util import time_record
 from app.common.logger_util import logger
 
@@ -85,9 +94,11 @@ class CoSight:
             if hasattr(llm, 'current_metadata'):
                 llm.current_metadata.update(task_metadata)
         
+        strict_dependencies = os.environ.get("COSIGHT_EXPERIMENT_MODE", "").strip().lower() == "optimized" or \
+            os.environ.get("COSIGHT_ENABLE_FACT_SUPERVISOR", "").strip().lower() in {"1", "true", "yes", "on"}
         create_task = question
         retry_count = 0
-        while not self.plan.get_ready_steps() and retry_count < 3:
+        while not self.plan.get_ready_steps(strict_mode=strict_dependencies) and retry_count < 3:
             create_result = self.task_planner_agent.create_plan(create_task, output_format)
             create_task += f"\nThe plan creation result is: {create_result}\nCreation failed, please carefully review the plan creation rules and select the create_plan tool to create the plan"
             retry_count += 1
@@ -97,7 +108,7 @@ class CoSight:
         
         while True:
             # 检查是否有新的可执行步骤
-            ready_steps = self.plan.get_ready_steps()
+            ready_steps = self.plan.get_ready_steps(strict_mode=strict_dependencies)
             
             # 启动新的可执行步骤
             for step_index in ready_steps:
@@ -118,6 +129,75 @@ class CoSight:
             for step_index in completed_steps:
                 del active_threads[step_index]
                 logger.info(f"Step {step_index} completed and thread removed")
+                if os.environ.get("COSIGHT_ENABLE_FACT_SUPERVISOR", "").strip().lower() in {"1", "true", "yes", "on"}:
+                    decision = inspect_after_step(self.plan, step_index)
+                    if hasattr(self.plan, "control_events"):
+                        self.plan.control_events.append(decision)
+                    logger.info(f"Fact supervisor decision after step {step_index}: {decision}")
+                    if decision.get("action") == SupervisorAction.REPLAN.value:
+                        try:
+                            self.plan.replan_count = int(getattr(self.plan, "replan_count", 0) or 0) + 1
+                        except Exception:
+                            pass
+                        try:
+                            context = build_replan_context(self.plan, decision)
+                            self.task_planner_agent.re_plan(question, output_format, context)
+                            dag_errors = validate_dag(self.plan.steps, self.plan.dependencies)
+                            if dag_errors:
+                                logger.error(f"Fact supervisor DAG validation failed after re_plan: {dag_errors}")
+                                if hasattr(self.plan, "control_events"):
+                                    self.plan.control_events.append({
+                                        "action": "dag_validation_failed",
+                                        "step_index": step_index,
+                                        "errors": dag_errors,
+                                    })
+                        except Exception as exc:
+                            logger.error(f"Fact supervisor re_plan failed: {exc}", exc_info=True)
+                    elif decision.get("action") == SupervisorAction.PRUNE.value:
+                        pruned = mark_pruned_steps(self.plan, "high_confidence_final_answer")
+                        logger.info(f"Fact supervisor pruned steps: {pruned}")
+                    elif decision.get("action") == SupervisorAction.ADD_VERIFY.value:
+                        verify_step = add_verify_step(self.plan, step_index)
+                        logger.info(f"Fact supervisor added verify step: {verify_step}")
+
+                # ===== 新加：Facts Router =====
+                # 在 supervisor_check 之后，根据 facts 质量做路由决策
+                route_decision = route(self.plan, step_index, question)
+                logger.info(f"[router] step {step_index} decision: {route_decision}")
+
+                # 保存路由决策到 plan（用于后续 JSONL 输出）
+                if not hasattr(self.plan, "route_decisions"):
+                    self.plan.route_decisions = {}
+                self.plan.route_decisions[str(step_index)] = route_decision
+
+                if route_decision == "retry":
+                    # 重置当前 step 状态，下轮循环重新调度
+                    # 只重置 step_statuses，保留 step_tool_calls 历史记录
+                    # 原因：保留历史才能让下次 route() 知道哪些工具已经失败过
+                    step = self.plan.steps[step_index]
+                    self.plan.step_statuses[step] = "not_started"
+                    # 不清空 step_facts，保留已有 facts
+                    # 不清空 step_tool_calls，保留工具调用历史
+                    # 增加 retry 计数
+                    if not hasattr(self.plan, "retry_count"):
+                        self.plan.retry_count = {}
+                    self.plan.retry_count[step_index] = self.plan.retry_count.get(step_index, 0) + 1
+                    logger.info(f"[router] step {step_index} → retry (count: {self.plan.retry_count[step_index]})")
+                    continue
+
+                if route_decision == "verify":
+                    # 插入一个验证 step（轻量实现，先只打日志）
+                    logger.info(f"[router] step {step_index} → verify（暂未实现，跳过）")
+                    # TODO: 实现 insert_verify_step(plan, step_index)
+
+                if route_decision == "replan":
+                    # 交给 Planner LLM（轻量实现，先只打日志）
+                    logger.info(f"[router] step {step_index} → replan（暂未实现，跳过）")
+                    # TODO: 实现 planner.replan(plan)
+                    # TODO: 增加 replan 计数
+
+                # next_step：什么都不做，循环自然推进
+                # ===== Facts Router 结束 =====
             
             # 如果没有活跃线程且没有可执行步骤，则退出
             if not active_threads and not ready_steps:
@@ -147,6 +227,13 @@ class CoSight:
             logger.info(f"Completed execution of step {step_index} with result: {result}")
         except Exception as e:
             logger.error(f"Error executing step {step_index}: {e}", exc_info=True)
+            try:
+                if 0 <= step_index < len(self.plan.steps):
+                    status = self.plan.step_statuses.get(self.plan.steps[step_index])
+                    if status in {"not_started", "in_progress"}:
+                        self.plan.mark_step(step_index, step_status="blocked", step_notes=str(e))
+            except Exception as mark_exc:
+                logger.error(f"Failed to mark step {step_index} as blocked: {mark_exc}", exc_info=True)
 
     def execute_steps(self, question, ready_steps):
         from threading import Thread, Semaphore

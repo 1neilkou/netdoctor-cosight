@@ -206,6 +206,32 @@ def solve_question(
                 pipeline_executed_tools.append(built_in_tool)
 
         verifier_result = verify_answer(result, question_item)
+        tool_results_summary = dict(tool_results_summary)
+        if "question_parser" in selected_tools and "question_parser" not in tool_results_summary:
+            tool_results_summary["question_parser"] = {
+                "status": "success",
+                "semantic_source": semantic_source,
+                "keywords_count": len(parsed.get("keywords", [])),
+                "constraints_count": len(parsed.get("constraints", [])),
+            }
+        if "answer_formatter" in selected_tools and "answer_formatter" not in tool_results_summary:
+            tool_results_summary["answer_formatter"] = {
+                "status": "success",
+                "final_answer_length": len(final_answer or ""),
+                "output_status": pipeline_status,
+            }
+        if "trace_recorder" in selected_tools and "trace_recorder" not in tool_results_summary:
+            tool_results_summary["trace_recorder"] = {
+                "status": "success",
+                "step_count": len(result.get("reasoning_trace", [])),
+            }
+        if "answer_verifier" in selected_tools and "answer_verifier" not in tool_results_summary:
+            tool_results_summary["answer_verifier"] = {
+                "status": "success" if verifier_result.get("is_valid") else "warning",
+                "is_valid": verifier_result.get("is_valid", False),
+                "score": verifier_result.get("score", 0.0),
+            }
+
         result["verifier_result"]       = verifier_result
         result["semantic_parse_source"] = semantic_source
         result["answer_source"]         = answer_source

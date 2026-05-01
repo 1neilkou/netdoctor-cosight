@@ -43,9 +43,14 @@ class TaskPlannerAgent(BaseAgent):
         result = self.execute(self.history, max_iteration=1)
         return result
 
-    def re_plan(self, question, output_format=""):
+    def re_plan(self, question, output_format="", supervisor_context: str = ""):
         self.history.append(
-            {"role": "user", "content": planner_re_plan_prompt(question, self.plan.format(), output_format)})
+            {"role": "user", "content": planner_re_plan_prompt(
+                question,
+                self.plan.format(),
+                output_format,
+                supervisor_context,
+            )})
         result = self.execute(self.history, max_iteration=1)
         return result
 

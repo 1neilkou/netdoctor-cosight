@@ -1,0 +1,40 @@
+{
+  "total_items": 1,
+  "completed": 1,
+  "failures": 0,
+  "exact_match_accuracy": 0.0,
+  "total_tokens": 300320,
+  "avg_tokens": 300320,
+  "std_tokens": 0.0,
+  "input_tokens": 292548,
+  "output_tokens": 7772,
+  "avg_input_tokens": 292548,
+  "avg_output_tokens": 7772,
+  "avg_actor_tokens": 296595,
+  "avg_planner_tokens": 3725,
+  "avg_actor_prompt_chars": 19301.74,
+  "avg_actor_prompt_est_tokens": 4825.16,
+  "avg_current_step_chars": 0.0,
+  "avg_dependency_context_chars": 0.0,
+  "avg_recent_context_chars": 0.0,
+  "avg_compact_plan_overview_chars": 0.0,
+  "avg_key_values_chars": 0.0,
+  "avg_artifact_refs_chars": 0.0,
+  "avg_tool_calls": 5,
+  "avg_elapsed_seconds": 127.36,
+  "min_tokens": 300320,
+  "max_tokens": 300320,
+  "top_token_tasks": [
+    {
+      "task_id": "384d0dd8-e8a4-4cfe-963c-d37f256e7662",
+      "total_tokens": 300320,
+      "input_tokens": 292548,
+      "output_tokens": 7772,
+      "actor_tokens": 296595,
+      "planner_tokens": 3725,
+      "tool_calls": 5,
+      "steps_count": 5,
+      "exact_match": false
+    }
+  ]
+}

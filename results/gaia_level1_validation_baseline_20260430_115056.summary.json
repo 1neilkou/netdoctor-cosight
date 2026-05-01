@@ -1,0 +1,23 @@
+{
+  "total_items": 1,
+  "completed": 1,
+  "failures": 0,
+  "exact_match_accuracy": 0.0,
+  "total_tokens": 238534,
+  "avg_tokens": 238534,
+  "std_tokens": 0,
+  "min_tokens": 238534,
+  "max_tokens": 238534,
+  "avg_tool_calls": 25,
+  "top_token_tasks": [
+    {
+      "task_id": "e1fc63a2-da7a-432f-be78-7c4a95598703",
+      "total_tokens": 238534,
+      "input_tokens": 234567,
+      "output_tokens": 3967,
+      "tool_calls": 25,
+      "steps_count": 4,
+      "exact_match": false
+    }
+  ]
+}

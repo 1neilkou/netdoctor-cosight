@@ -1,0 +1,78 @@
+{
+  "total_items": 5,
+  "completed": 5,
+  "failures": 0,
+  "exact_match_accuracy": 0.2,
+  "total_tokens": 1438149,
+  "avg_tokens": 287629.8,
+  "std_tokens": 112043.85,
+  "input_tokens": 1404104,
+  "output_tokens": 34045,
+  "avg_input_tokens": 280820.8,
+  "avg_output_tokens": 6809,
+  "avg_actor_tokens": 283220.8,
+  "avg_planner_tokens": 4409,
+  "avg_actor_prompt_chars": 14230.68,
+  "avg_actor_prompt_est_tokens": 3557.31,
+  "avg_tool_calls": 36.4,
+  "avg_elapsed_seconds": 153.31,
+  "min_tokens": 176761,
+  "max_tokens": 450490,
+  "top_token_tasks": [
+    {
+      "task_id": "935e2cff-ae78-4218-b3f5-115589b19dae",
+      "total_tokens": 450490,
+      "input_tokens": 436940,
+      "output_tokens": 13550,
+      "actor_tokens": 445680,
+      "planner_tokens": 4810,
+      "tool_calls": 52,
+      "steps_count": 5,
+      "exact_match": true
+    },
+    {
+      "task_id": "cffe0e32-c9a6-4c52-9877-78ceb4aaa9fb",
+      "total_tokens": 389231,
+      "input_tokens": 381634,
+      "output_tokens": 7597,
+      "actor_tokens": 383928,
+      "planner_tokens": 5303,
+      "tool_calls": 42,
+      "steps_count": 4,
+      "exact_match": false
+    },
+    {
+      "task_id": "8e867cd7-cff9-4e6c-867a-ff5ddc2550be",
+      "total_tokens": 241129,
+      "input_tokens": 235221,
+      "output_tokens": 5908,
+      "actor_tokens": 235784,
+      "planner_tokens": 5345,
+      "tool_calls": 29,
+      "steps_count": 3,
+      "exact_match": false
+    },
+    {
+      "task_id": "bda648d7-d618-4883-88f4-3466eabd860e",
+      "total_tokens": 180538,
+      "input_tokens": 177064,
+      "output_tokens": 3474,
+      "actor_tokens": 177309,
+      "planner_tokens": 3229,
+      "tool_calls": 38,
+      "steps_count": 3,
+      "exact_match": false
+    },
+    {
+      "task_id": "7d4a7d1d-cac6-44a8-96e8-ea9584a70825",
+      "total_tokens": 176761,
+      "input_tokens": 173245,
+      "output_tokens": 3516,
+      "actor_tokens": 173403,
+      "planner_tokens": 3358,
+      "tool_calls": 21,
+      "steps_count": 3,
+      "exact_match": false
+    }
+  ]
+}

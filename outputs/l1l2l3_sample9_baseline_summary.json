@@ -1,0 +1,172 @@
+{
+  "total_items": 9,
+  "completed": 9,
+  "failures": 0,
+  "exact_match_accuracy": 0.4444,
+  "accuracy_overall": 0.4444,
+  "accuracy_L1": 0.6667,
+  "accuracy_L2": 0.6667,
+  "accuracy_L3": 0.0,
+  "total_tokens": 1953725,
+  "avg_tokens": 217080.56,
+  "avg_total_tokens": 217080.56,
+  "std_tokens": 75577.66,
+  "input_tokens": 1901704,
+  "output_tokens": 52021,
+  "avg_input_tokens": 211300.44,
+  "avg_output_tokens": 5780.11,
+  "avg_actor_tokens": 212886.78,
+  "avg_planner_tokens": 4193.78,
+  "avg_actor_prompt_chars": 29517.24,
+  "avg_actor_prompt_est_tokens": 7378.92,
+  "avg_current_step_chars": 0.0,
+  "avg_dependency_context_chars": 0.0,
+  "avg_recent_context_chars": 0.0,
+  "avg_compact_plan_overview_chars": 0.0,
+  "avg_key_values_chars": 0.0,
+  "avg_artifact_refs_chars": 0.0,
+  "avg_facts_count": 4.67,
+  "avg_blockers_count": 0,
+  "avg_tool_calls": 5.78,
+  "avg_tool_call_count": 5.78,
+  "blocked_error_rate": 0.0,
+  "multi_hop_accuracy": 0.3333,
+  "avg_replan_count": 0,
+  "prune_trigger_rate": 0.0,
+  "avg_verify_steps_added": 0,
+  "avg_steps_executed": 3.89,
+  "avg_steps_skipped": 0,
+  "avg_step_confidence": 0.36,
+  "avg_final_answer_confidence": 0.0,
+  "confidence_calibration": [
+    {
+      "range": "[0.5, 0.6)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.6, 0.7)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.7, 0.8)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.8, 0.9)",
+      "count": 0,
+      "accuracy": 0.0
+    },
+    {
+      "range": "[0.9, 1.0)",
+      "count": 0,
+      "accuracy": 0.0
+    }
+  ],
+  "avg_elapsed_seconds": 123.4,
+  "min_tokens": 85899,
+  "max_tokens": 298483,
+  "top_token_tasks": [
+    {
+      "task_id": "384d0dd8-e8a4-4cfe-963c-d37f256e7662",
+      "total_tokens": 298483,
+      "input_tokens": 292113,
+      "output_tokens": 6370,
+      "actor_tokens": 294778,
+      "planner_tokens": 3705,
+      "tool_calls": 5,
+      "steps_count": 5,
+      "exact_match": false
+    },
+    {
+      "task_id": "8e867cd7-cff9-4e6c-867a-ff5ddc2550be",
+      "total_tokens": 294594,
+      "input_tokens": 292579,
+      "output_tokens": 2015,
+      "actor_tokens": 291282,
+      "planner_tokens": 3312,
+      "tool_calls": 8,
+      "steps_count": 3,
+      "exact_match": true
+    },
+    {
+      "task_id": "ad2b4d70-9314-4fe6-bfbe-894a45f6055f",
+      "total_tokens": 285093,
+      "input_tokens": 279523,
+      "output_tokens": 5570,
+      "actor_tokens": 281531,
+      "planner_tokens": 3562,
+      "tool_calls": 4,
+      "steps_count": 5,
+      "exact_match": false
+    },
+    {
+      "task_id": "676e5e31-a554-4acc-9286-b60d90a92d26",
+      "total_tokens": 247189,
+      "input_tokens": 241160,
+      "output_tokens": 6029,
+      "actor_tokens": 242769,
+      "planner_tokens": 4420,
+      "tool_calls": 7,
+      "steps_count": 4,
+      "exact_match": false
+    },
+    {
+      "task_id": "e4e91f1c-1dcd-439e-9fdd-cb976f5293fd",
+      "total_tokens": 243354,
+      "input_tokens": 237669,
+      "output_tokens": 5685,
+      "actor_tokens": 239302,
+      "planner_tokens": 4052,
+      "tool_calls": 2,
+      "steps_count": 4,
+      "exact_match": false
+    },
+    {
+      "task_id": "cffe0e32-c9a6-4c52-9877-78ceb4aaa9fb",
+      "total_tokens": 228629,
+      "input_tokens": 223452,
+      "output_tokens": 5177,
+      "actor_tokens": 225157,
+      "planner_tokens": 3472,
+      "tool_calls": 11,
+      "steps_count": 4,
+      "exact_match": true
+    },
+    {
+      "task_id": "e29834fd-413a-455c-a33e-c3915b07401c",
+      "total_tokens": 165355,
+      "input_tokens": 160598,
+      "output_tokens": 4757,
+      "actor_tokens": 161690,
+      "planner_tokens": 3665,
+      "tool_calls": 7,
+      "steps_count": 4,
+      "exact_match": true
+    },
+    {
+      "task_id": "7d4a7d1d-cac6-44a8-96e8-ea9584a70825",
+      "total_tokens": 105129,
+      "input_tokens": 102160,
+      "output_tokens": 2969,
+      "actor_tokens": 101458,
+      "planner_tokens": 3671,
+      "tool_calls": 6,
+      "steps_count": 3,
+      "exact_match": false
+    },
+    {
+      "task_id": "14569e28-c88c-43e4-8c32-097d35b9a67d",
+      "total_tokens": 85899,
+      "input_tokens": 72450,
+      "output_tokens": 13449,
+      "actor_tokens": 78014,
+      "planner_tokens": 7885,
+      "tool_calls": 2,
+      "steps_count": 3,
+      "exact_match": true
+    }
+  ]
+}

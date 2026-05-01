@@ -354,7 +354,7 @@ Ensure your final answer contains only the content in the following format: {out
     return create_plan_prompt
 
 
-def planner_re_plan_prompt(question, plan, output_format=""):
+def planner_re_plan_prompt(question, plan, output_format="", supervisor_context: str = ""):
     import sys
     import os
     # 添加路径以导入 llm.py
@@ -403,6 +403,8 @@ Turbo mode replanning:
                 replan_prompt += f"\n确保你的最终答案仅包含以下格式的内容：{output_format}"
             else:
                 replan_prompt += f"\nEnsure your final answer contains only the content in the following format: {output_format}"
+        if supervisor_context:
+            replan_prompt += f"\n\nSupervisor context:\n{supervisor_context}\n"
         return replan_prompt
     
     if contains_chinese:
@@ -458,6 +460,8 @@ Current plan status:
 Evaluate and adjust the current plan according to the replanning rules in the system prompt.
     """
 
+    if supervisor_context:
+        replan_prompt += f"\n\nSupervisor context:\n{supervisor_context}\n"
     return replan_prompt
 
 

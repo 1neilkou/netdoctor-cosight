@@ -1,0 +1,48 @@
+{
+  "num_tasks": 1,
+  "baseline": {
+    "accuracy": 1.0,
+    "avg_total_tokens": 322300,
+    "avg_input_tokens": 313595,
+    "avg_output_tokens": 8705,
+    "avg_actor_tokens": 316285,
+    "avg_planner_tokens": 6015,
+    "avg_actor_prompt_chars": 26341.17,
+    "avg_actor_prompt_est_tokens": 6584.94,
+    "avg_tool_calls": 42,
+    "avg_elapsed_seconds": 169.1
+  },
+  "optimized": {
+    "accuracy": 1.0,
+    "avg_total_tokens": 340091,
+    "avg_input_tokens": 330867,
+    "avg_output_tokens": 9224,
+    "avg_actor_tokens": 333511,
+    "avg_planner_tokens": 6580,
+    "avg_actor_prompt_chars": 27037.89,
+    "avg_actor_prompt_est_tokens": 6759.22,
+    "avg_tool_calls": 38,
+    "avg_elapsed_seconds": 112.18
+  },
+  "delta": {
+    "accuracy_change": 0.0,
+    "avg_total_tokens_change_pct": 5.52,
+    "avg_input_tokens_change_pct": 5.51,
+    "avg_actor_prompt_chars_change_pct": 2.64,
+    "avg_tool_calls_change_pct": -9.52,
+    "avg_elapsed_seconds_change_pct": -33.66
+  },
+  "per_task": [
+    {
+      "task_id": "935e2cff-ae78-4218-b3f5-115589b19dae",
+      "baseline_exact_match": true,
+      "optimized_exact_match": true,
+      "baseline_total_tokens": 322300,
+      "optimized_total_tokens": 340091,
+      "token_change_pct": 5.52,
+      "baseline_actor_prompt_chars": 26341.17,
+      "optimized_actor_prompt_chars": 27037.89,
+      "prompt_chars_change_pct": 2.64
+    }
+  ]
+}

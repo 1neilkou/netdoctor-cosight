@@ -1,18 +1,29 @@
-"""Build compact, structured context views for actor execution."""
+"""Build compact structured context views for actor execution."""
 
 from __future__ import annotations
 
+import json
 import re
-from pathlib import PureWindowsPath
 from typing import Any
+
+from app.common.logger_util import logger
 
 
 PATH_RE = re.compile(
     r"([A-Za-z]:\\[^\s\"'<>|]+|/[^\s\"'<>|]+|[\w./\\-]+\.(?:txt|md|json|csv|html|pdf|docx|xlsx|png|jpg|jpeg|py))"
 )
-KEY_VALUE_RE = re.compile(
-    r"(?i)(final answer\s*:\s*.{1,120}|answer\s*:\s*.{1,120}|[\w ./'\"-]{1,50}\s*=\s*.{1,80}|\b\d+(?:\.\d+)?\s*(?:%|percent|km|miles?|years?|days?|hours?|minutes?|seconds?|kg|g|lb|usd|dollars?)\b)"
-)
+
+_ASSERT_RUNS = 0
+_MAX_ASSERT_RUNS = 10
+
+
+def token_count(value: Any) -> int:
+    """Cheap token estimate used only for guardrail assertions."""
+    if isinstance(value, str):
+        text = value
+    else:
+        text = json.dumps(value, ensure_ascii=False, default=str, separators=(",", ":"))
+    return max(1, len(text) // 4)
 
 
 def _safe_list(value: Any) -> list[Any]:
@@ -34,22 +45,12 @@ def _text(value: Any, limit: int | None = None) -> str:
     text = " ".join(text.split())
     if limit is None or len(text) <= limit:
         return text
-    return text[:limit] + "...[truncated]"
+    return text[:limit]
 
 
 def _step(plan: Any, step_index: int) -> str:
     steps = _safe_list(getattr(plan, "steps", []))
-    return steps[step_index] if 0 <= step_index < len(steps) else ""
-
-
-def _status(plan: Any, step_index: int) -> str:
-    step = _step(plan, step_index)
-    return str(_safe_dict(getattr(plan, "step_statuses", {})).get(step, ""))
-
-
-def _note(plan: Any, step_index: int) -> str:
-    step = _step(plan, step_index)
-    return str(_safe_dict(getattr(plan, "step_notes", {})).get(step, "") or "")
+    return str(steps[step_index]) if 0 <= step_index < len(steps) else ""
 
 
 def _direct_dependencies(plan: Any, step_index: int) -> list[int]:
@@ -59,6 +60,7 @@ def _direct_dependencies(plan: Any, step_index: int) -> list[int]:
         raw = deps.get(step_index, deps.get(str(step_index), []))
     elif isinstance(deps, (list, tuple, set)):
         raw = deps
+
     result: list[int] = []
     for item in _safe_list(raw):
         try:
@@ -70,20 +72,9 @@ def _direct_dependencies(plan: Any, step_index: int) -> list[int]:
     return result
 
 
-def _key_values_from_text(text: str, limit: int = 5) -> list[str]:
-    values: list[str] = []
-    for match in KEY_VALUE_RE.finditer(text or ""):
-        value = _text(match.group(1), 120)
-        if value and value not in values:
-            values.append(value)
-        if len(values) >= limit:
-            break
-    return values
-
-
-def _paths_from_text(text: str) -> list[str]:
+def _paths_from_text(text: Any) -> list[str]:
     paths: list[str] = []
-    for match in PATH_RE.finditer(text or ""):
+    for match in PATH_RE.finditer(str(text or "")):
         path = _text(match.group(1).rstrip(".,);]"), 200)
         if path and path not in paths:
             paths.append(path)
@@ -91,143 +82,171 @@ def _paths_from_text(text: str) -> list[str]:
 
 
 def _compact_path(path: Any) -> str:
-    text = _text(path, 200)
-    if not text:
-        return ""
-    try:
-        return PureWindowsPath(text).name if "\\" in text and PureWindowsPath(text).name else text
-    except Exception:
-        return text
+    return _text(path, 200)
 
 
-def _artifact_refs(plan: Any, indices: list[int], max_paths: int = 10) -> list[str]:
-    refs: list[str] = []
+def _facts_for_step(plan: Any, step_index: int) -> list[dict[str, Any]]:
+    step = _step(plan, step_index)
+    raw_facts = _safe_list(_safe_dict(getattr(plan, "step_facts", {})).get(step, []))
+    facts: list[dict[str, Any]] = []
+    for fact in raw_facts:
+        if not isinstance(fact, dict):
+            continue
+        try:
+            confidence = fact.get("confidence")
+            confidence_value = None if confidence is None else float(confidence)
+        except (TypeError, ValueError):
+            confidence_value = None
+        if confidence_value is not None and confidence_value < 0.5:
+            continue
+
+        source = _text(fact.get("source", ""), 160)
+        evidence = _text(fact.get("evidence", ""), 240)
+        if source.lower() == "unknown" and not evidence:
+            continue
+
+        key = _text(fact.get("key", ""), 120)
+        value = _text(fact.get("value", ""), 300)
+        if not key or not value:
+            continue
+        facts.append({
+            "step_index": step_index,
+            "key": key,
+            "value": value,
+            "source": source,
+            "confidence": confidence_value,
+            "evidence": evidence,
+        })
+    return facts
+
+
+def _artifact_refs(plan: Any, dep_indices: list[int], max_paths: int = 10) -> list[str]:
     steps = _safe_list(getattr(plan, "steps", []))
+    step_artifacts = _safe_dict(getattr(plan, "step_artifacts", {}))
     step_files = _safe_dict(getattr(plan, "step_files", {}))
-    tool_calls = _safe_dict(getattr(plan, "step_tool_calls", {}))
-    workspace = getattr(plan, "work_space_path", "") or getattr(plan, "workspace_path", "")
-    if workspace:
-        refs.append(_text(workspace, 200))
+    step_tool_calls = _safe_dict(getattr(plan, "step_tool_calls", {}))
+    refs: list[str] = []
 
-    for idx in indices:
+    def add_path(path: Any) -> None:
+        compact = _compact_path(path)
+        if compact and compact not in refs and len(refs) < max_paths:
+            refs.append(compact)
+
+    for idx in dep_indices:
         step = steps[idx] if 0 <= idx < len(steps) else ""
-        candidates: list[Any] = [step_files.get(step, "")]
-        for call in _safe_list(tool_calls.get(step, [])):
+        for artifact in _safe_list(step_artifacts.get(step, [])):
+            add_path(artifact)
+        for path in _paths_from_text(step_files.get(step, "")):
+            add_path(path)
+        for call in _safe_list(step_tool_calls.get(step, [])):
             if isinstance(call, dict):
-                candidates.extend([call.get("tool_args", ""), call.get("tool_name", "")])
-        for candidate in candidates:
-            for path in _paths_from_text(str(candidate or "")):
-                compact = _compact_path(path)
-                if compact and compact not in refs:
-                    refs.append(compact)
-                if len(refs) >= max_paths:
-                    return refs[:max_paths]
+                for path in _paths_from_text(call.get("tool_args", "")):
+                    add_path(path)
+        if len(refs) >= max_paths:
+            break
     return refs[:max_paths]
 
 
-def _step_summary(plan: Any, step_index: int, summary_limit: int) -> dict[str, Any]:
-    note = _note(plan, step_index)
+def _tool_summary(plan: Any, dep_indices: list[int]) -> dict[str, Any]:
+    steps = _safe_list(getattr(plan, "steps", []))
+    step_tool_calls = _safe_dict(getattr(plan, "step_tool_calls", {}))
+    names: list[str] = []
+    count = 0
+    for idx in dep_indices:
+        step = steps[idx] if 0 <= idx < len(steps) else ""
+        calls = _safe_list(step_tool_calls.get(step, []))
+        count += len(calls)
+        for call in calls:
+            if isinstance(call, dict):
+                name = str(call.get("tool_name", "") or "")
+                if name and name not in names:
+                    names.append(name)
     return {
-        "step_index": step_index,
-        "status": _status(plan, step_index),
-        "summary": _text(note, summary_limit),
-        "key_values": _key_values_from_text(note),
-        "artifact_refs": _paths_from_text(note)[:5],
+        "tool_call_count": count,
+        "tool_names": names[:8],
     }
 
 
-def build_actor_view(
-    plan: Any,
-    step_index: int,
-    max_recent_steps: int = 1,
-    max_summary_chars: int = 500,
-    max_recent_chars: int = 300,
-    include_compact_overview: bool = True,
-    include_key_values: bool = True,
-    include_artifact_refs: bool = True,
-) -> dict[str, Any]:
-    """Return a compact context view for one actor step.
-
-    This intentionally avoids full ``Plan.format()``, full step notes, and full
-    tool outputs. All Plan fields are accessed defensively.
-    """
+def _plan_overview(plan: Any) -> list[dict[str, Any]]:
     steps = _safe_list(getattr(plan, "steps", []))
     statuses = _safe_dict(getattr(plan, "step_statuses", {}))
-    tool_calls = _safe_dict(getattr(plan, "step_tool_calls", {}))
-
-    dep_indices = [idx for idx in _direct_dependencies(plan, step_index) if 0 <= idx < len(steps)]
-    dep_set = set(dep_indices)
-    recent_indices = [
-        idx
-        for idx, step in enumerate(steps[: max(step_index, 0)])
-        if statuses.get(step) == "completed" and idx not in dep_set
-    ]
-    if max_recent_steps <= 0:
-        recent_indices = []
-    else:
-        recent_indices = recent_indices[-max_recent_steps:]
-    related_indices = dep_indices + [idx for idx in recent_indices if idx not in dep_set]
-
-    compact_plan_overview = []
-    if include_compact_overview:
-        compact_plan_overview = [
-            {
-                "step_index": idx,
-                "status": str(statuses.get(step, "")),
-                "one_line_summary": _text(step, 120),
-            }
-            for idx, step in enumerate(steps)
-        ]
-
-    key_values: dict[str, list[str]] = {}
-    if include_key_values:
-        for idx in related_indices:
-            values = _key_values_from_text(_note(plan, idx))
-            if values:
-                key_values[f"step_{idx}"] = values
-
-    artifact_refs = _artifact_refs(plan, related_indices) if include_artifact_refs else []
-
-    tool_call_brief: dict[str, Any] = {}
-    for idx in related_indices:
-        step = steps[idx] if 0 <= idx < len(steps) else ""
-        calls = _safe_list(tool_calls.get(step, []))
-        if calls:
-            names = []
-            for call in calls[:3]:
-                if isinstance(call, dict):
-                    name = str(call.get("tool_name", "") or "")
-                    if name:
-                        names.append(name)
-            tool_call_brief[f"step_{idx}"] = {
-                "tool_call_count": len(calls),
-                "tools": names,
-            }
-
-    failed_or_blocked_steps = [
-        {
+    notes = _safe_dict(getattr(plan, "step_notes", {}))
+    overview: list[dict[str, Any]] = []
+    for idx, step in enumerate(steps):
+        note = _text(notes.get(step, ""), 80)
+        overview.append({
             "step_index": idx,
             "status": str(statuses.get(step, "")),
-            "reason": _text(_note(plan, idx), 200),
-        }
-        for idx, step in enumerate(steps)
-        if statuses.get(step) in {"failed", "blocked"}
+            "one_line_summary": note or _text(step, 80),
+        })
+    return overview
+
+
+def build_actor_view(plan: Any, step_index: int) -> dict[str, Any]:
+    """Return a compact actor view for the current DAG step.
+
+    The view intentionally excludes raw tool outputs, full step notes, and
+    full historical facts. It only carries direct dependency facts.
+    """
+    dep_indices = [
+        idx
+        for idx in _direct_dependencies(plan, step_index)
+        if 0 <= idx < len(_safe_list(getattr(plan, "steps", [])))
     ]
 
-    return {
-        "current_step_index": step_index,
-        "current_step": _text(_step(plan, step_index), None),
-        "dependency_summaries": [
-            _step_summary(plan, idx, max_summary_chars)
-            for idx in dep_indices
-        ],
-        "recent_completed_summaries": [
-            _step_summary(plan, idx, max_recent_chars)
-            for idx in recent_indices
-        ],
-        "compact_plan_overview": compact_plan_overview,
-        "failed_or_blocked_steps": failed_or_blocked_steps,
-        "artifact_refs": artifact_refs,
-        "key_values": key_values,
-        "tool_call_brief": tool_call_brief,
+    dependency_facts: list[dict[str, Any]] = []
+    for idx in dep_indices:
+        dependency_facts.extend(_facts_for_step(plan, idx))
+
+    actor_view = {
+        "current_step": _step(plan, step_index),
+        "dependency_facts": dependency_facts,
+        "artifact_refs": _artifact_refs(plan, dep_indices),
+        "tool_summary": _tool_summary(plan, dep_indices),
+        "plan_overview": _plan_overview(plan),
     }
+
+    global _ASSERT_RUNS
+    if _ASSERT_RUNS < _MAX_ASSERT_RUNS:
+        _ASSERT_RUNS += 1
+        steps = _safe_list(getattr(plan, "steps", []))
+        notes = _safe_dict(getattr(plan, "step_notes", {}))
+        facts = _safe_dict(getattr(plan, "step_facts", {}))
+        tool_calls = _safe_dict(getattr(plan, "step_tool_calls", {}))
+        has_history = any(
+            notes.get(step) or facts.get(step) or tool_calls.get(step)
+            for step in steps[:step_index]
+        )
+        full_history = plan.format() if has_history and hasattr(plan, "format") else ""
+        if full_history:
+            actor_view_tokens = token_count(actor_view)
+            full_history_tokens = token_count(full_history)
+            debug = getattr(plan, "actor_view_debug", None)
+            if not isinstance(debug, dict):
+                debug = {}
+                try:
+                    setattr(plan, "actor_view_debug", debug)
+                except Exception:
+                    debug = {}
+
+            if actor_view_tokens >= full_history_tokens:
+                logger.warning(
+                    "[actor_view] step %s: actor_view (%s tokens) >= full_history (%s tokens), "
+                    "compression did not help; continue execution",
+                    step_index,
+                    actor_view_tokens,
+                    full_history_tokens,
+                )
+                debug[step_index] = {
+                    "actor_view_tokens": actor_view_tokens,
+                    "full_history_tokens": full_history_tokens,
+                    "warning": "no_compression",
+                }
+            else:
+                debug[step_index] = {
+                    "actor_view_tokens": actor_view_tokens,
+                    "full_history_tokens": full_history_tokens,
+                    "warning": "",
+                }
+
+    return actor_view

@@ -1,0 +1,87 @@
+{
+  "num_tasks": 3,
+  "baseline": {
+    "accuracy": 0.6667,
+    "avg_total_tokens": 303389,
+    "avg_input_tokens": 299388.33,
+    "avg_output_tokens": 4000.67,
+    "avg_actor_tokens": 299860,
+    "avg_planner_tokens": 3529,
+    "avg_actor_prompt_chars": 62411.74,
+    "avg_actor_prompt_est_tokens": 15602.61,
+    "avg_current_step_chars": 0.0,
+    "avg_dependency_context_chars": 0.0,
+    "avg_recent_context_chars": 0.0,
+    "avg_compact_plan_overview_chars": 0.0,
+    "avg_key_values_chars": 0.0,
+    "avg_artifact_refs_chars": 0.0,
+    "avg_tool_calls": 8.33,
+    "avg_elapsed_seconds": 76.02
+  },
+  "optimized": {
+    "accuracy": 0.6667,
+    "avg_total_tokens": 377003.33,
+    "avg_input_tokens": 371903,
+    "avg_output_tokens": 5100.33,
+    "avg_actor_tokens": 373396.67,
+    "avg_planner_tokens": 3606.67,
+    "avg_actor_prompt_chars": 35835.72,
+    "avg_actor_prompt_est_tokens": 8958.6,
+    "avg_current_step_chars": 104.7,
+    "avg_dependency_context_chars": 218.41,
+    "avg_recent_context_chars": 4.0,
+    "avg_compact_plan_overview_chars": 460.22,
+    "avg_key_values_chars": 12.4,
+    "avg_artifact_refs_chars": 249.42,
+    "avg_tool_calls": 15.67,
+    "avg_elapsed_seconds": 97.52
+  },
+  "delta": {
+    "accuracy_change": 0.0,
+    "total_tokens_change_pct": 24.26,
+    "input_tokens_change_pct": 24.22,
+    "prompt_chars_change_pct": -42.58,
+    "tool_calls_change_pct": 88.12,
+    "latency_change_pct": 28.28,
+    "avg_total_tokens_change_pct": 24.26,
+    "avg_input_tokens_change_pct": 24.22,
+    "avg_actor_prompt_chars_change_pct": -42.58,
+    "avg_tool_calls_change_pct": 88.12,
+    "avg_elapsed_seconds_change_pct": 28.28
+  },
+  "per_task": [
+    {
+      "task_id": "8e867cd7-cff9-4e6c-867a-ff5ddc2550be",
+      "baseline_exact_match": true,
+      "optimized_exact_match": true,
+      "baseline_total_tokens": 561128,
+      "optimized_total_tokens": 137922,
+      "token_change_pct": -75.42,
+      "baseline_actor_prompt_chars": 147970.27,
+      "optimized_actor_prompt_chars": 23758.53,
+      "prompt_chars_change_pct": -83.94
+    },
+    {
+      "task_id": "cffe0e32-c9a6-4c52-9877-78ceb4aaa9fb",
+      "baseline_exact_match": true,
+      "optimized_exact_match": true,
+      "baseline_total_tokens": 218388,
+      "optimized_total_tokens": 912164,
+      "token_change_pct": 317.68,
+      "baseline_actor_prompt_chars": 20289.94,
+      "optimized_actor_prompt_chars": 66697.5,
+      "prompt_chars_change_pct": 228.72
+    },
+    {
+      "task_id": "7d4a7d1d-cac6-44a8-96e8-ea9584a70825",
+      "baseline_exact_match": false,
+      "optimized_exact_match": false,
+      "baseline_total_tokens": 130651,
+      "optimized_total_tokens": 80924,
+      "token_change_pct": -38.06,
+      "baseline_actor_prompt_chars": 18975.0,
+      "optimized_actor_prompt_chars": 17051.13,
+      "prompt_chars_change_pct": -10.14
+    }
+  ]
+}

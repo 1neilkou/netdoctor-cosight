@@ -1,0 +1,65 @@
+{
+  "num_tasks": 1,
+  "baseline": {
+    "accuracy": 1.0,
+    "avg_total_tokens": 322300,
+    "avg_input_tokens": 313595,
+    "avg_output_tokens": 8705,
+    "avg_actor_tokens": 316285,
+    "avg_planner_tokens": 6015,
+    "avg_actor_prompt_chars": 26341.17,
+    "avg_actor_prompt_est_tokens": 6584.94,
+    "avg_current_step_chars": 0.0,
+    "avg_dependency_context_chars": 0.0,
+    "avg_recent_context_chars": 0.0,
+    "avg_compact_plan_overview_chars": 0.0,
+    "avg_key_values_chars": 0.0,
+    "avg_artifact_refs_chars": 0.0,
+    "avg_tool_calls": 42,
+    "avg_elapsed_seconds": 169.1
+  },
+  "optimized": {
+    "accuracy": 1.0,
+    "avg_total_tokens": 452458,
+    "avg_input_tokens": 441926,
+    "avg_output_tokens": 10532,
+    "avg_actor_tokens": 445969,
+    "avg_planner_tokens": 6489,
+    "avg_actor_prompt_chars": 25924.68,
+    "avg_actor_prompt_est_tokens": 6480.74,
+    "avg_current_step_chars": 0.0,
+    "avg_dependency_context_chars": 0.0,
+    "avg_recent_context_chars": 0.0,
+    "avg_compact_plan_overview_chars": 0.0,
+    "avg_key_values_chars": 0.0,
+    "avg_artifact_refs_chars": 0.0,
+    "avg_tool_calls": 6,
+    "avg_elapsed_seconds": 99.21
+  },
+  "delta": {
+    "accuracy_change": 0.0,
+    "total_tokens_change_pct": 40.38,
+    "input_tokens_change_pct": 40.92,
+    "prompt_chars_change_pct": -1.58,
+    "tool_calls_change_pct": -85.71,
+    "latency_change_pct": -41.33,
+    "avg_total_tokens_change_pct": 40.38,
+    "avg_input_tokens_change_pct": 40.92,
+    "avg_actor_prompt_chars_change_pct": -1.58,
+    "avg_tool_calls_change_pct": -85.71,
+    "avg_elapsed_seconds_change_pct": -41.33
+  },
+  "per_task": [
+    {
+      "task_id": "935e2cff-ae78-4218-b3f5-115589b19dae",
+      "baseline_exact_match": true,
+      "optimized_exact_match": true,
+      "baseline_total_tokens": 322300,
+      "optimized_total_tokens": 452458,
+      "token_change_pct": 40.38,
+      "baseline_actor_prompt_chars": 26341.17,
+      "optimized_actor_prompt_chars": 25924.68,
+      "prompt_chars_change_pct": -1.58
+    }
+  ]
+}

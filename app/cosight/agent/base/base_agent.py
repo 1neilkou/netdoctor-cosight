@@ -34,6 +34,24 @@ from app.cosight.agent.base.tool_arg_mapping import FUNCTION_ARG_MAPPING
 from config.config import get_turbo_mode
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+MAX_REACT_ROUNDS = _env_int("MAX_REACT_ROUNDS", 15)
+MAX_CONSECUTIVE_ERRORS = _env_int("MAX_CONSECUTIVE_ERRORS", 5)
+TOOL_ERROR_MARKERS = (
+    "error",
+    "failed",
+    "no module named",
+    "is stubbed",
+    "not found",
+)
+
+
 class BaseAgent:
     def __init__(self, agent_instance: AgentInstance, llm: ChatLLM, functions: {}, plan_id: str = None):
         self.agent_instance = agent_instance
@@ -388,6 +406,9 @@ class BaseAgent:
         if turbo_mode:
             max_iteration = min(max_iteration, 5)  # 急速模式下最多5次迭代
             logger.info(f"Turbo mode enabled: max_iteration reduced to {max_iteration}")
+        if step_index is not None:
+            max_iteration = min(max_iteration, MAX_REACT_ROUNDS)
+        consecutive_errors = 0
         
         for i in range(max_iteration):
             # 为了避免日志过大，这里不再打印完整 messages，只记录关键元信息
@@ -398,7 +419,24 @@ class BaseAgent:
             response = self.llm.create_with_tools(messages, self.tools)
 
             # Process initial response
+            before_len = len(messages)
             result = self._process_response(response, messages, step_index)
+            tool_results = [
+                message for message in messages[before_len:]
+                if isinstance(message, dict) and message.get("role") == "tool"
+            ]
+            if step_index is not None and tool_results:
+                error_count = sum(1 for tool_result in tool_results if self._is_tool_error(tool_result))
+                success_count = len(tool_results) - error_count
+                if success_count:
+                    consecutive_errors = 0
+                elif error_count:
+                    consecutive_errors += error_count
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    reason = f"工具连续报错 {MAX_CONSECUTIVE_ERRORS} 次，停止重试"
+                    logger.warning(reason)
+                    self._mark_step_blocked(step_index, reason)
+                    return reason
             # result 也可能较大，这里不再完整打印，只给出是否结束的信息
             logger.info(
                 f"iter {i} for {self.agent_instance.instance_name} call tools done, "
@@ -407,9 +445,33 @@ class BaseAgent:
             if result:
                 return result
 
+        if step_index is not None and max_iteration >= MAX_REACT_ROUNDS:
+            reason = f"超过最大轮数限制 {MAX_REACT_ROUNDS}，强制结束"
+            logger.warning(reason)
+            self._mark_step_blocked(step_index, reason)
+            return reason
+
         if max_iteration > 1:
             return self._handle_max_iteration(messages, step_index)
         return messages[-1].get("content")
+
+    def _is_tool_error(self, tool_result: Dict[str, Any]) -> bool:
+        content = "" if tool_result is None else tool_result.get("content")
+        if content is None:
+            return True
+        text = str(content).strip()
+        if not text:
+            return True
+        lower_text = text.lower()
+        return any(marker in lower_text for marker in TOOL_ERROR_MARKERS)
+
+    def _mark_step_blocked(self, step_index: int, reason: str) -> None:
+        if self.plan is None or step_index is None:
+            return
+        try:
+            self.plan.mark_step(step_index, step_status="blocked", step_notes=reason)
+        except Exception as exc:
+            logger.warning(f"Failed to mark step {step_index} blocked: {exc}")
 
     def _record_actor_prompt_stats(self, messages: List[Dict[str, Any]], step_index=None):
         try:
@@ -640,7 +702,7 @@ class BaseAgent:
             # 记录工具调用信息到Plan对象（如果有plan引用且step_index有效）
             if self.plan and step_index is not None and hasattr(self.plan, 'add_tool_call'):
                 try:
-                    self.plan.add_tool_call(step_index, function_name, function_args, str(result))
+                    self.plan.add_tool_call(step_index, function_name, function_args, str(result), status="success")
                 except Exception as e:
                     logger.warning(f"Failed to record tool call to plan: {e}")
 
@@ -659,6 +721,18 @@ class BaseAgent:
                                 "", step_index, duration, error_msg)
             
             logger.error(f"Unhandled exception: {e}", exc_info=True)
+            if self.plan and step_index is not None and hasattr(self.plan, 'add_tool_call'):
+                try:
+                    self.plan.add_tool_call(
+                        step_index,
+                        function_name,
+                        function_args,
+                        "",
+                        status="failed",
+                        error=error_msg,
+                    )
+                except Exception as record_exc:
+                    logger.warning(f"Failed to record failed tool call to plan: {record_exc}")
             return {
                 "role": "tool",
                 "name": function_name,
@@ -763,7 +837,7 @@ class BaseAgent:
                 if self.plan and hasattr(self.plan, 'add_tool_call'):
                     try:
                         # MCP工具调用没有step_index，使用-1表示全局工具调用
-                        self.plan.add_tool_call(-1, function_name, function_args, str(result))
+                        self.plan.add_tool_call(-1, function_name, function_args, str(result), status="success")
                     except Exception as e:
                         logger.warning(f"Failed to record MCP tool call to plan: {e}")
                 
@@ -780,6 +854,11 @@ class BaseAgent:
                 # 推送MCP工具执行错误事件
                 self._push_tool_event("tool_error", function_name, function_args, 
                                     "", -1, duration, error_msg)
+                if self.plan and hasattr(self.plan, 'add_tool_call'):
+                    try:
+                        self.plan.add_tool_call(-1, function_name, function_args, "", status="failed", error=error_msg)
+                    except Exception as record_exc:
+                        logger.warning(f"Failed to record failed MCP tool call to plan: {record_exc}")
                 
                 return {
                     "role": "tool",
@@ -796,6 +875,11 @@ class BaseAgent:
                                 "", -1, duration, error_msg)
             
             logger.error(f"Unhandled exception: {e}", exc_info=True)
+            if self.plan and hasattr(self.plan, 'add_tool_call'):
+                try:
+                    self.plan.add_tool_call(-1, function_name, function_args, "", status="failed", error=error_msg)
+                except Exception as record_exc:
+                    logger.warning(f"Failed to record failed MCP tool call to plan: {record_exc}")
             return {
                 "role": "tool",
                 "name": function_name,
