@@ -25,6 +25,23 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.
 from llm import llm_for_act
 from config.config import get_turbo_mode
 
+
+def _attachment_prompt() -> str:
+    attachment_path = os.environ.get("COSIGHT_ATTACHMENT_PATH", "").strip()
+    if not attachment_path:
+        return ""
+    return f'本题附带文件，路径为：{attachment_path}，请优先读取此文件。\n'
+
+
+def _fetch_fallback_prompt() -> str:
+    return (
+        "If direct web access returns [FETCH_FAILED] or an access/verification page, try alternate retrieval paths:\n"
+        "- https://web.archive.org/web/{url}\n"
+        "- https://www.semanticscholar.org/search?q={keywords}\n"
+        "- Unpaywall for DOI: https://api.unpaywall.org/v2/{doi}?email=test@test.com\n"
+    )
+
+
 def actor_system_prompt(work_space_path: str):
     # 检查是否启用急速模式
     turbo_mode = get_turbo_mode()
@@ -54,6 +71,8 @@ You are a task execution assistant in TURBO MODE. Focus on efficiency and minima
 4. Tool Usage:
    - Minimize tool calls - combine operations when possible
    - Prefer direct answers over extensive research when appropriate
+
+{_fetch_fallback_prompt()}
 
 # Environment Information
 - Operating System: {platform.platform()}
@@ -101,6 +120,7 @@ You are an assistant helping complete complex tasks. Your goal is to execute tas
    - After you save the file, check to make sure that the file is generated correctly, and rebuild if it is not successfully generated to ensure that the file exists
    - When the content information is insufficient, you can summarize and supplement it by yourself
    - Save the analysis report using file_saver before marking the step
+   - If direct web access returns [FETCH_FAILED] or a verification/access page, try Web Archive, Semantic Scholar search, or Unpaywall DOI lookup before giving up.
 5. When using search tools:
    - ALWAYS after receiving search results, extract useful information exactly as presented
    - Format extracted information in a suitable document format with clear organization
@@ -159,6 +179,8 @@ You are an assistant helping complete complex tasks. Your goal is to execute tas
 - Operating System: {platform.platform()}
 - WorkSpace: {work_space_path or os.getenv("WORKSPACE_PATH") or os.getcwd()}
 - Encoding: UTF-8 (must be used for all file operations)
+
+{_fetch_fallback_prompt()}
 """
     return system_prompt
 
@@ -233,6 +255,7 @@ Work efficiently with minimal tool calls. No file generation in intermediate ste
     
     execute_task_prompt = f"""
 Current Task Execution Context:
+{_attachment_prompt()}
 Task: {task}
 Plan: {plan.format()}
 Current Step Index: {step_index}
@@ -315,6 +338,7 @@ def actor_execute_task_prompt_v2(task: str, step_index: int, actor_view: dict, w
         else "5. Keep reusable facts, artifacts, blockers, and confidence concise in the step result.\n"
     )
     prompt = (
+        f"{_attachment_prompt()}"
         f"Question:\n{sections['question']}\n\n"
         "Instructions:\n"
         "1. Complete only the current step.\n"
@@ -323,6 +347,7 @@ def actor_execute_task_prompt_v2(task: str, step_index: int, actor_view: dict, w
         "4. If information is insufficient, use tools.\n"
         f"{fact_instruction}"
         "6. Return a concise step result with important facts, values, and file paths.\n\n"
+        f"{_fetch_fallback_prompt()}\n"
         f"Current step:\n{sections['current_step']}\n\n"
         f"Dependency facts:\n{sections['dependency_facts']}\n\n"
         f"Artifact refs:\n{sections['artifact_refs']}\n\n"

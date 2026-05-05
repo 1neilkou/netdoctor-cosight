@@ -1,4 +1,4 @@
-# Copyright 2025 ZTE Corporation.
+﻿# Copyright 2025 ZTE Corporation.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -593,3 +593,4 @@ def extract_and_replace_paths(text: str, folder_name: str, workspace_path: str) 
 def process_text_with_workspace(text: str, work_space_path: str) -> Tuple[str, List[Dict[str, str]]]:
     folder_name = get_last_folder_name(work_space_path)
     return extract_and_replace_paths(text, folder_name, work_space_path)
+

@@ -49,7 +49,80 @@ TOOL_ERROR_MARKERS = (
     "no module named",
     "is stubbed",
     "not found",
+    "[fetch_failed]",
 )
+COMPLETION_CHECK_NOTE_MARKERS = (
+    "unable",
+    "cannot",
+    "failed",
+    "error",
+    "no result",
+    "找不到",
+    "无法",
+    "失败",
+    "没有找到",
+    "无结果",
+)
+
+
+def _completion_check_enabled() -> bool:
+    mode = os.environ.get("COSIGHT_EXPERIMENT_MODE", "baseline").strip().lower()
+    if mode != "optimized":
+        return False
+    value = os.environ.get("COSIGHT_ENABLE_COMPLETION_CHECK", "1")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _completion_check_needed(plan: Any, step_index: int | None, step_notes: str) -> bool:
+    notes = str(step_notes or "").strip()
+    if not notes or len(notes) < 20:
+        return True
+    lower_notes = notes.lower()
+    if any(marker.lower() in lower_notes for marker in COMPLETION_CHECK_NOTE_MARKERS):
+        return True
+    if plan is None or step_index is None:
+        return False
+    try:
+        steps = getattr(plan, "steps", [])
+        step = steps[step_index] if 0 <= step_index < len(steps) else None
+    except Exception:
+        step = None
+    tool_calls = getattr(plan, "step_tool_calls", {})
+    if isinstance(tool_calls, dict):
+        calls = tool_calls.get(step, []) if step is not None else []
+        return len(calls or []) == 0
+    return False
+
+
+def _check_step_completion(step_description: str, step_notes: str, llm: ChatLLM | None) -> bool:
+    """Return True when step_notes substantially satisfy the step requirement.
+
+    The check is intentionally fail-open: if the checker LLM is unavailable or
+    errors, execution continues so the quality gate cannot block the pipeline.
+    """
+    if llm is None:
+        return True
+    notes = str(step_notes or "").strip()
+    if not notes:
+        return False
+    system_prompt = "你是质量检查助手，只输出 YES 或 NO。"
+    user_prompt = (
+        f"步骤要求：{step_description}\n"
+        f"执行结果：{notes[:4000]}\n\n"
+        "执行结果是否实质性地完成了步骤要求？\n"
+        "结果为空、无关、或只说无法完成，输出 NO。\n"
+        "否则输出 YES。"
+    )
+    try:
+        content = llm.chat_to_llm([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ], max_tokens=8)
+    except Exception as exc:
+        logger.warning(f"completion check failed open: {exc}")
+        return True
+    answer = str(content or "").strip().upper()
+    return answer.startswith("YES")
 
 
 class BaseAgent:
@@ -65,6 +138,7 @@ class BaseAgent:
         self.functions = functions
         self.history = []
         self.plan_id = plan_id
+        self._completion_check_counts = {}
         self._tool_event_sequence = 0  # 工具事件序列号
         self._file_saver_call_count = {}  # 记录每个步骤的file_saver调用次数
         # Only set plan to None if it hasn't been set by subclass
@@ -473,6 +547,48 @@ class BaseAgent:
         except Exception as exc:
             logger.warning(f"Failed to mark step {step_index} blocked: {exc}")
 
+    def _is_completed_mark_step(self, function_name: str, args_dict: Dict[str, Any]) -> bool:
+        if function_name != "mark_step" or not isinstance(args_dict, dict):
+            return False
+        status = args_dict.get("step_status", args_dict.get("status", ""))
+        return str(status or "").strip().lower() == "completed"
+
+    def _should_reject_completed_mark_step(self, args_dict: Dict[str, Any], step_index: int | None) -> bool:
+        if not _completion_check_enabled():
+            return False
+        if self.plan is None:
+            return False
+        try:
+            effective_step_index = int(args_dict.get("step_index", step_index))
+        except (TypeError, ValueError):
+            effective_step_index = step_index
+        if effective_step_index is None:
+            return False
+        count = self._completion_check_counts.get(effective_step_index, 0)
+        if count >= 2:
+            return False
+        notes = str(
+            args_dict.get("step_notes")
+            or args_dict.get("notes")
+            or args_dict.get("result")
+            or ""
+        )
+        if not _completion_check_needed(self.plan, effective_step_index, notes):
+            return False
+        steps = getattr(self.plan, "steps", [])
+        step_description = steps[effective_step_index] if 0 <= effective_step_index < len(steps) else ""
+        llm = getattr(self, "completion_check_llm", None)
+        passed = _check_step_completion(step_description, notes, llm)
+        if passed:
+            return False
+        self._completion_check_counts[effective_step_index] = count + 1
+        logger.info(
+            "Completion check rejected mark_step(completed) for step %s, attempt %s",
+            effective_step_index,
+            self._completion_check_counts[effective_step_index],
+        )
+        return True
+
     def _record_actor_prompt_stats(self, messages: List[Dict[str, Any]], step_index=None):
         try:
             message_content_chars = 0
@@ -574,6 +690,12 @@ class BaseAgent:
 
         # Check for termination conditions
         for result in results:
+            if result.get("completion_check_failed"):
+                messages.append({
+                    "role": "user",
+                    "content": "你的结果还没完成步骤要求，请继续执行。",
+                })
+                return None
             if result["name"] in ["terminate", "mark_step"]:
                 return result["content"]
         return None
@@ -673,6 +795,16 @@ class BaseAgent:
                 if self._file_saver_call_count[step_index] > 1:
                     logger.warning(f"file_saver called {self._file_saver_call_count[step_index]} times in step {step_index}. "
                                  f"Consider consolidating file saves to improve performance.")
+
+            if self._is_completed_mark_step(function_name, args_dict) and self._should_reject_completed_mark_step(args_dict, step_index):
+                content = "你的结果还没完成步骤要求，请继续执行。"
+                return {
+                    "role": "tool",
+                    "name": function_name,
+                    "content": content,
+                    "tool_call_id": tool_call_id,
+                    "completion_check_failed": True,
+                }
 
             function_to_call = self.functions[function_name]
 

@@ -19,7 +19,12 @@ from typing import Dict
 
 from app.agent_dispatcher.infrastructure.entity.AgentInstance import AgentInstance
 from app.cosight.agent.actor.prompt.actor_prompt import actor_system_prompt, actor_system_prompt_zh, actor_execute_task_prompt, actor_execute_task_prompt_zh, actor_execute_task_prompt_v2
-from app.cosight.agent.base.base_agent import BaseAgent
+from app.cosight.agent.base.base_agent import (
+    BaseAgent,
+    _check_step_completion,
+    _completion_check_enabled,
+    _completion_check_needed,
+)
 from app.cosight.llm.chat_llm import ChatLLM
 from app.cosight.task.plan_report_manager import plan_report_event_manager
 from app.cosight.task.task_manager import TaskManager
@@ -144,6 +149,7 @@ class TaskActorAgent(BaseAgent):
         
         # Initialize BaseAgent with all functions and plan_id
         super().__init__(agent_instance, llm, all_functions, plan_id=plan_id)
+        self.completion_check_llm = tool_llm
         
         # Check if plan exists and has title before accessing it
         is_chinese = bool(re.search(r'[\u4e00-\u9fff]', self.plan.title)) if self.plan and self.plan.title else True
@@ -181,12 +187,31 @@ class TaskActorAgent(BaseAgent):
         self.history.append(
             {"role": "user", "content": task_prompt})
         try:
-            result = self.execute(self.history, step_index=step_index)
-            if self.plan.step_statuses.get(self.plan.steps[step_index], "") == "in_progress":
+            completion_checks = 0
+            while True:
+                result = self.execute(self.history, step_index=step_index)
+                if self.plan.step_statuses.get(self.plan.steps[step_index], "") != "in_progress":
+                    return result
+                if (
+                    _completion_check_enabled()
+                    and _completion_check_needed(self.plan, step_index, str(result))
+                    and completion_checks < 2
+                    and not _check_step_completion(
+                    self.plan.steps[step_index],
+                    str(result),
+                    self.completion_check_llm,
+                    )
+                ):
+                    completion_checks += 1
+                    self.history.append({
+                        "role": "user",
+                        "content": "Your result has not completed the step requirement yet. Please continue.",
+                    })
+                    continue
                 self.plan.mark_step(step_index, step_status="completed", step_notes=str(result))
                 # 步骤完成后，主动上报一次计划进度，确保前端收到manus-step
                 plan_report_event_manager.publish("plan_process", self.plan)
-            return result
+                return result
         except Exception as e:
             logger.error(f'act agent execute error: {str(e)}', exc_info=True)
             self.plan.mark_step(step_index, step_status="blocked", step_notes=str(e))

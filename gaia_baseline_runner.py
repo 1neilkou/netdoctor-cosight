@@ -142,29 +142,120 @@ def _gold_answer(item: dict[str, Any]) -> str:
     return _first_text(item, ["Final answer", "final_answer", "answer", "gold_answer"])
 
 
+def _attachment_path(item: dict[str, Any]) -> str:
+    file_path = _first_text(item, ["file_path", "File Path", "attachment_path", "attachments"])
+    file_name = _first_text(item, ["file_name", "File Name", "attachment", "filename"])
+    if not file_path and not file_name:
+        return ""
+
+    raw_path = file_path or file_name
+    path = Path(raw_path)
+    candidates = [
+        path,
+        Path.cwd() / path,
+        Path.cwd().parent / path,
+        Path.cwd() / "contest" / path,
+        Path.cwd().parent / "contest" / path,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+    return str((Path.cwd().parent / "contest" / path).resolve())
+
+
+LEAK_SIGNALS = [
+    "```",
+    "tool_call",
+    "update_plan",
+    "execute_code",
+    "mark_step",
+    "def ",
+    "import ",
+    "fetch_website_content",
+    "search_wiki",
+    "extract_document_content",
+    "file_read",
+    "<tool>",
+    "Action:",
+    "Observation:",
+    "tool_input",
+    "tool_name",
+]
+
+
+ABBREV_MAP = {
+    r"\bst\.\s*": "saint ",
+    r"\bmt\.\s*": "mount ",
+    r"\bft\.\s*": "fort ",
+    r"\bdr\.\s*": "drive ",
+    r"\bave\.\s*": "avenue ",
+}
+
+
+SYNONYM_MAP = {
+    r"\bgrave accent\b": "backtick",
+    r"\bgrave\b": "backtick",
+    r"\bback-tick\b": "backtick",
+    r"\bbackquote\b": "backtick",
+}
+
+
+def _strip_numeric_unit(text: str) -> str:
+    match = re.fullmatch(
+        r"(\d+(?:\.\d+)?)\s*(?:years?|months?|days?|hours?|minutes?|seconds?|times?|%|percent)?",
+        text.strip(),
+        flags=re.IGNORECASE,
+    )
+    return match.group(1) if match else text
+
+
 def _normalize_answer(value: str) -> str:
     text = str(value or "").strip().lower()
     text = re.sub(r"\s+", " ", text)
-    return text.strip(" \t\r\n\"'`.,;:")
+    text = text.strip(" \t\r\n\"'`.,;:*")
+    for pattern, replacement in ABBREV_MAP.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    for pattern, replacement in SYNONYM_MAP.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip()
+    return _strip_numeric_unit(text)
 
 
 def _exact_match(prediction: str, gold: str) -> bool:
     return bool(gold) and _normalize_answer(prediction) == _normalize_answer(gold)
 
 
-def _make_prompt(question: str) -> str:
+def _make_prompt(question: str, attachment_path: str = "") -> str:
+    attachment_note = (
+        f"本题附带文件，路径为：{attachment_path}，请优先读取此文件。\n\n"
+        if attachment_path
+        else ""
+    )
     return (
+        attachment_note +
         f"{question}\n\n"
         "Give the final answer as concisely as possible. "
         "At the end, include a line exactly in this format: FINAL ANSWER: <answer>."
     )
 
 
+def _has_answer_leak(answer: str) -> bool:
+    answer_lower = str(answer or "").lower()
+    return any(signal.lower() in answer_lower for signal in LEAK_SIGNALS)
+
+
 def _extract_final_answer(text: str) -> str:
-    matches = re.findall(r"FINAL ANSWER\s*:\s*(.+)", text or "", flags=re.IGNORECASE)
-    if matches:
-        return matches[-1].strip()
-    return (text or "").strip()
+    raw_text = text or ""
+    matches = re.findall(r"FINAL ANSWER\s*:\s*(.+)", raw_text, flags=re.IGNORECASE)
+    candidates = list(reversed(matches)) if matches else [raw_text]
+    for candidate in candidates:
+        answer = candidate.strip(" \t\r\n\"'`.,;:*")
+        answer = re.sub(r"^FINAL ANSWER\s*:\s*", "", answer, flags=re.IGNORECASE).strip()
+        answer = re.sub(r"^(Answer|答案|最终答案)\s*:\s*", "", answer, flags=re.IGNORECASE).strip()
+        if not answer or _has_answer_leak(answer):
+            continue
+        return _strip_numeric_unit(answer)
+    return ""
 
 
 def _usage_summary(cosight: CoSight) -> dict[str, Any]:
@@ -224,11 +315,13 @@ def _run_one(item: dict[str, Any], index: int, mode: str, args: argparse.Namespa
     task_id = _task_id(item, index)
     question = _question(item)
     gold = _gold_answer(item)
+    attachment_path = _attachment_path(item)
     workspace_path = (WORKSPACE_ROOT / mode / task_id).resolve()
     workspace_path.mkdir(parents=True, exist_ok=True)
 
     previous_mode = os.environ.get("COSIGHT_EXPERIMENT_MODE")
     previous_task_id = os.environ.get("COSIGHT_TASK_ID")
+    previous_attachment_path = os.environ.get("COSIGHT_ATTACHMENT_PATH")
     previous_options = {
         name: os.environ.get(name)
         for name in [
@@ -245,6 +338,10 @@ def _run_one(item: dict[str, Any], index: int, mode: str, args: argparse.Namespa
     }
     os.environ["COSIGHT_EXPERIMENT_MODE"] = mode
     os.environ["COSIGHT_TASK_ID"] = task_id
+    if attachment_path:
+        os.environ["COSIGHT_ATTACHMENT_PATH"] = attachment_path
+    else:
+        os.environ.pop("COSIGHT_ATTACHMENT_PATH", None)
     if mode == "optimized":
         max_recent_steps = 0 if args.disable_recent_context else args.max_recent_steps
         os.environ["COSIGHT_MAX_RECENT_STEPS"] = str(max_recent_steps)
@@ -259,7 +356,7 @@ def _run_one(item: dict[str, Any], index: int, mode: str, args: argparse.Namespa
     started = time.time()
     try:
         cosight = _build_cosight(f"gaia_{mode}_{task_id}", workspace_path)
-        cosight.execute(_make_prompt(question))
+        cosight.execute(_make_prompt(question, attachment_path))
     finally:
         if previous_mode is None:
             os.environ.pop("COSIGHT_EXPERIMENT_MODE", None)
@@ -269,6 +366,10 @@ def _run_one(item: dict[str, Any], index: int, mode: str, args: argparse.Namespa
             os.environ.pop("COSIGHT_TASK_ID", None)
         else:
             os.environ["COSIGHT_TASK_ID"] = previous_task_id
+        if previous_attachment_path is None:
+            os.environ.pop("COSIGHT_ATTACHMENT_PATH", None)
+        else:
+            os.environ["COSIGHT_ATTACHMENT_PATH"] = previous_attachment_path
         for name, value in previous_options.items():
             if value is None:
                 os.environ.pop(name, None)
@@ -327,6 +428,7 @@ def _run_one(item: dict[str, Any], index: int, mode: str, args: argparse.Namespa
         "prediction": final_answer,
         "raw_prediction": raw_answer,
         "gold_answer": gold,
+        "attachment_path": attachment_path,
         "exact_match": _exact_match(final_answer, gold),
         "elapsed_seconds": round(elapsed, 3),
         "steps_count": len(extracted.get("steps", []) or []),

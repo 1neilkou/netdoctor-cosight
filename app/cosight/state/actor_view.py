@@ -120,6 +120,26 @@ def _facts_for_step(plan: Any, step_index: int) -> list[dict[str, Any]]:
     return facts
 
 
+def _step_notes_fallback_fact(plan: Any, step_index: int) -> dict[str, Any] | None:
+    """Return a dependency fact from raw step notes when structured facts are absent."""
+    step = _step(plan, step_index)
+    notes = _safe_dict(getattr(plan, "step_notes", {}))
+    note_text = _text(notes.get(step, ""), 300)
+    if not note_text:
+        return None
+    raw_note_text = _text(notes.get(step, ""))
+    if len(raw_note_text) > 300:
+        note_text = f"{note_text}..."
+    return {
+        "step_index": step_index,
+        "key": f"step_{step_index}_result",
+        "value": note_text,
+        "source": "step_notes_fallback",
+        "confidence": 0.7,
+        "evidence": "",
+    }
+
+
 def _artifact_refs(plan: Any, dep_indices: list[int], max_paths: int = 10) -> list[str]:
     steps = _safe_list(getattr(plan, "steps", []))
     step_artifacts = _safe_dict(getattr(plan, "step_artifacts", {}))
@@ -196,7 +216,13 @@ def build_actor_view(plan: Any, step_index: int) -> dict[str, Any]:
 
     dependency_facts: list[dict[str, Any]] = []
     for idx in dep_indices:
-        dependency_facts.extend(_facts_for_step(plan, idx))
+        facts = _facts_for_step(plan, idx)
+        if facts:
+            dependency_facts.extend(facts)
+            continue
+        fallback_fact = _step_notes_fallback_fact(plan, idx)
+        if fallback_fact:
+            dependency_facts.append(fallback_fact)
 
     actor_view = {
         "current_step": _step(plan, step_index),

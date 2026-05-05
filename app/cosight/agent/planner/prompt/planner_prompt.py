@@ -1,4 +1,4 @@
-# Copyright 2025 ZTE Corporation.
+﻿# Copyright 2025 ZTE Corporation.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -465,7 +465,43 @@ Evaluate and adjust the current plan according to the replanning rules in the sy
     return replan_prompt
 
 
-def planner_finalize_plan_prompt(question, plan, output_format=""):
+LOW_QUALITY_STEP_SIGNALS = [
+    "404",
+    "not found",
+    "search results",
+    "no results",
+    "access denied",
+    "[fetch_failed]",
+    "permission denied",
+    "搜索结果",
+    "未找到",
+    "无结果",
+]
+
+
+def _build_low_quality_steps_summary(plan) -> str:
+    low_quality_steps = []
+    steps = list(getattr(plan, "steps", []) or [])
+    step_statuses = getattr(plan, "step_statuses", {}) or {}
+    step_notes = getattr(plan, "step_notes", {}) or {}
+
+    for index, step in enumerate(steps):
+        status = step_statuses.get(step, step_statuses.get(index, ""))
+        if status != "completed":
+            continue
+
+        notes = str(step_notes.get(step, step_notes.get(index, "")) or "").strip()
+        notes_lower = notes.lower()
+        if len(notes) < 50 or any(signal.lower() in notes_lower for signal in LOW_QUALITY_STEP_SIGNALS):
+            note_summary = notes[:160].replace("\n", " ") if notes else "无有效结果"
+            low_quality_steps.append(
+                f"Step {index} ({str(step)[:60]}): notes={note_summary}"
+            )
+
+    return "\n".join(low_quality_steps)
+
+
+def planner_finalize_plan_prompt(question, plan, output_format="", step_status_summary: str = ""):
     import sys
     import os
     # 添加路径以导入 llm.py
@@ -481,6 +517,32 @@ def planner_finalize_plan_prompt(question, plan, output_format=""):
     # 判断是否包含中文
     contains_chinese = any('\u4e00' <= c <= '\u9fff' for c in question)
 
+    status_guardrail = f"""
+注意：以下是各步骤的完成状态。
+如果某步骤状态为 dependency_blocked 或 blocked，
+说明该步骤没有执行结果，不要编造其结果。
+
+只根据状态为 completed 的步骤的实际结果生成答案。
+如果所有关键步骤都未完成，直接输出：
+FINAL ANSWER: Unable to determine — required information could not be retrieved.
+
+绝对不要在最终答案里输出工具调用代码、JSON、或任何非自然语言内容。
+
+Step status list:
+{step_status_summary}
+"""
+    low_quality_steps_summary = _build_low_quality_steps_summary(plan)
+    low_quality_guardrail = ""
+    if low_quality_steps_summary:
+        low_quality_guardrail = f"""
+以下步骤虽然标记为已完成，但实际没有找到有效信息：
+{low_quality_steps_summary}
+
+对于这些步骤，不要基于你的先验知识补充答案。
+如果关键步骤没有可靠证据，输出：
+FINAL ANSWER: Unable to determine — required information could not be retrieved.
+"""
+
     if contains_chinese:
         finalize_prompt = f"""
 原始任务：{question}
@@ -490,6 +552,8 @@ def planner_finalize_plan_prompt(question, plan, output_format=""):
 """
         if output_format:
             finalize_prompt += output_format_prompt
+        finalize_prompt += status_guardrail
+        finalize_prompt += low_quality_guardrail
 
         # 根据模型类型提供不同的总结指导（中文版）
         if is_claude:
@@ -528,6 +592,9 @@ Ensure your final answer contains only the content in the following format: {out
 Plan status:
 {plan}
 
+{status_guardrail}
+{low_quality_guardrail}
+
 Please provide a brief summary of the task results:
 - Was the task completed successfully? If yes, what worked well?
 - If there were issues, what were they?
@@ -538,9 +605,16 @@ Please provide a brief summary of the task results:
 Plan status:
 {plan}
 
+{status_guardrail}
+{low_quality_guardrail}
+
 Please generate a detailed task summary report based on the above information, including:
 - If the task was successful, output the key success factors
 - If the task failed, output the main reasons for failure and improvement suggestions
 - Don't create another plan, just summarize the current plan
 """
     return finalize_prompt
+
+
+
+

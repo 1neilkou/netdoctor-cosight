@@ -54,9 +54,30 @@ class TaskPlannerAgent(BaseAgent):
         result = self.execute(self.history, max_iteration=1)
         return result
 
+    def _step_status_summary(self) -> str:
+        lines = []
+        steps = getattr(self.plan, "steps", []) or []
+        statuses = getattr(self.plan, "step_statuses", {}) or {}
+        notes = getattr(self.plan, "step_notes", {}) or {}
+        for index, step in enumerate(steps):
+            step_text = str(step)
+            status = statuses.get(step, "unknown")
+            note = str(notes.get(step, "") or "")
+            if status == "completed" and note:
+                note_text = " ".join(note.split())[:100]
+            else:
+                note_text = "无结果"
+            lines.append(f"Step {index} ({step_text[:50]}): {status} — {note_text}")
+        return "\n".join(lines)
+
     def finalize_plan(self, question, output_format=""):
         self.history.append(
-            {"role": "user", "content": planner_finalize_plan_prompt(question, self.plan.format(), output_format)})
+            {"role": "user", "content": planner_finalize_plan_prompt(
+                question,
+                self.plan.format(),
+                output_format,
+                self._step_status_summary(),
+            )})
         result = self.llm.chat_to_llm(self.history)
         self.plan.set_plan_result(result)
         plan_report_event_manager.publish("plan_result", self.plan)

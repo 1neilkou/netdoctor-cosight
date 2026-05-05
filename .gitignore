@@ -30,3 +30,13 @@ contest/results/
 
 # HuggingFace 缓存
 ~/.cache/huggingface/
+
+# 评估结果和工作区（体积大，不入库）
+outputs/
+results/
+
+# GAIA 数据集（有版权）
+contest/
+
+# 环境变量通配
+*.env
