@@ -311,6 +311,63 @@ def mark_step_skill():
     }
 
 
+def record_facts_skill():
+    return {
+        'skill_name': 'record_facts',
+        'skill_type': "function",
+        'display_name_zh': '记录结构化事实',
+        'display_name_en': 'Record Facts',
+        'description_zh': '记录当前步骤产生的可复用结构化事实、产物路径、阻塞原因和置信度',
+        'description_en': 'Record reusable structured facts, artifact paths, blockers, and confidence for the current step',
+        'semantic_apis': ["api_planning"],
+        'function': SkillFunction(
+            id='1a9d8db7-47b6-4b72-9b20-4b56f3c5e991',
+            name='app.cosight.tool.fact_toolkit.FactToolkit.record_facts',
+            description_zh='将当前步骤的关键事实写入共享 Plan 状态，供后续步骤和 Planner 使用',
+            description_en='Write key facts from the current step into shared Plan state for downstream steps and the Planner',
+            parameters={
+                "type": "object",
+                "properties": {
+                    "step_index": {
+                        "type": "integer",
+                        "description_en": "Index of the current step, starting from 0"
+                    },
+                    "facts": {
+                        "type": "array",
+                        "description_en": "Atomic reusable facts discovered in this step. Keep values short and evidence-backed.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": {"type": "string", "description_en": "Short fact name, e.g. birth_year or final_answer"},
+                                "value": {"type": "string", "description_en": "Short fact value"},
+                                "source": {"type": "string", "description_en": "URL, file path, tool, or source name"},
+                                "confidence": {"type": "number", "description_en": "Confidence between 0 and 1"},
+                                "evidence": {"type": "string", "description_en": "Brief evidence snippet"}
+                            },
+                            "required": ["key", "value"]
+                        }
+                    },
+                    "artifacts": {
+                        "type": "array",
+                        "description_en": "Generated or important file paths/URLs",
+                        "items": {"type": "string"}
+                    },
+                    "blockers": {
+                        "type": "array",
+                        "description_en": "Reasons this step is blocked or uncertain",
+                        "items": {"type": "string"}
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description_en": "Overall confidence for this step result, between 0 and 1"
+                    }
+                },
+                "required": ["step_index"]
+            }
+        )
+    }
+
+
 def file_saver_skill():
     return {
         'skill_name': 'file_saver',

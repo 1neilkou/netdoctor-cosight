@@ -1,0 +1,122 @@
+[
+  {
+    "timestamp": "2026-04-28 00:28:00",
+    "cell_id": "CELL_004",
+    "alarm_type": "cell_overload",
+    "severity": "critical",
+    "description": "上行 PRB 利用率持续超过 90%，已达 99%，上行吞吐量严重压缩至 1.1 Mbps",
+    "possible_impact": "用户上行速率大幅下降，语音/视频通话卡顿，投诉量上升"
+  },
+  {
+    "timestamp": "2026-04-28 00:33:00",
+    "cell_id": "CELL_005",
+    "alarm_type": "cell_overload",
+    "severity": "critical",
+    "description": "上行 PRB 利用率达 100%，小区上行容量耗尽，用户上行业务严重受损",
+    "possible_impact": "上行彻底拥塞，实时业务（视频会议、直播上传）无法正常使用"
+  },
+  {
+    "timestamp": "2026-04-28 00:14:00",
+    "cell_id": "CELL_002",
+    "alarm_type": "high_interference",
+    "severity": "major",
+    "description": "SINR 持续低于 3 dB，RSRP 低于 -95 dBm，疑似受到邻区或外部干扰源影响",
+    "possible_impact": "解调性能下降，重传率升高，用户体验显著恶化"
+  },
+  {
+    "timestamp": "2026-04-28 00:14:00",
+    "cell_id": "CELL_003",
+    "alarm_type": "high_interference",
+    "severity": "critical",
+    "description": "SINR 为 -1.5 dB，RSRP -102 dBm，疑为弱覆盖叠加同频干扰，覆盖空洞风险高",
+    "possible_impact": "掉话率升高，用户无法建立或维持正常连接"
+  },
+  {
+    "timestamp": "2026-04-28 00:44:00",
+    "cell_id": "CELL_006",
+    "alarm_type": "neighbor_relation_abnormal",
+    "severity": "major",
+    "description": "切换成功率连续 3 个周期低于 92%，疑似邻区关系缺失或切换参数配置异常",
+    "possible_impact": "用户在移动过程中发生掉话，体验差，投诉量增加"
+  },
+  {
+    "timestamp": "2026-04-28 00:49:00",
+    "cell_id": "CELL_007",
+    "alarm_type": "neighbor_relation_abnormal",
+    "severity": "major",
+    "description": "切换成功率下降至 86.7%，结合 SINR 恶化趋势，判断为乒乓切换或邻区漏配",
+    "possible_impact": "移动用户频繁掉话，影响高价值用户体验"
+  },
+  {
+    "timestamp": "2026-04-28 01:13:00",
+    "cell_id": "CELL_009",
+    "alarm_type": "high_interference",
+    "severity": "major",
+    "description": "RSRP 低于 -99 dBm，SINR 接近 0 dB，弱覆盖与高干扰并存",
+    "possible_impact": "速率下降、重传增加，影响小区边缘用户业务质量"
+  },
+  {
+    "timestamp": "2026-04-28 01:13:00",
+    "cell_id": "CELL_010",
+    "alarm_type": "high_interference",
+    "severity": "critical",
+    "description": "SINR -3.2 dB，RSRP -103 dBm，疑似强同频干扰源，小区几乎无法正常服务",
+    "possible_impact": "严重掉话、无法接入，区域内用户大规模投诉"
+  },
+  {
+    "timestamp": "2026-04-28 01:24:00",
+    "cell_id": "CELL_011",
+    "alarm_type": "cell_overload",
+    "severity": "major",
+    "description": "上行 PRB 利用率 94%，接近饱和，上行吞吐量仅剩 2.0 Mbps",
+    "possible_impact": "用户上行体验明显下降，高并发场景下投诉增多"
+  },
+  {
+    "timestamp": "2026-04-28 01:29:00",
+    "cell_id": "CELL_011",
+    "alarm_type": "cell_overload",
+    "severity": "critical",
+    "description": "上行 PRB 利用率达 100%，上行完全拥塞，已持续 10 分钟未恢复",
+    "possible_impact": "上行业务全面中断，建议立即执行话务均衡或参数调优"
+  },
+  {
+    "timestamp": "2026-04-28 01:29:00",
+    "cell_id": "CELL_012",
+    "alarm_type": "cell_overload",
+    "severity": "critical",
+    "description": "上行 PRB 利用率达 100%，与 CELL_011 同属同一区域，怀疑话务集中于局部热点",
+    "possible_impact": "热点区域上行容量耗尽，需结合负载均衡或扩容评估"
+  },
+  {
+    "timestamp": "2026-04-28 01:34:00",
+    "cell_id": "CELL_006",
+    "alarm_type": "transmission_degradation",
+    "severity": "major",
+    "description": "切换成功率下降至 84.1%，SINR 恶化至 6.8 dB，疑似传输质量劣化或 RRU 异常",
+    "possible_impact": "切换失败率升高，用户掉话投诉增多，可能影响相邻小区"
+  },
+  {
+    "timestamp": "2026-04-28 01:59:00",
+    "cell_id": "CELL_007",
+    "alarm_type": "transmission_degradation",
+    "severity": "critical",
+    "description": "切换成功率下降至 78.8%，SINR 4.3 dB，上行 PRB 54%，传输链路疑似存在误码或断路",
+    "possible_impact": "小区接入成功率下降，大量用户被迫重新附着，严重影响区域业务"
+  },
+  {
+    "timestamp": "2026-04-28 02:04:00",
+    "cell_id": "CELL_016",
+    "alarm_type": "hardware_warning",
+    "severity": "major",
+    "description": "RSRP 急速恶化至 -96 dBm，SINR 1.2 dB，短时间内覆盖质量骤降，疑似天线或 RRU 硬件异常",
+    "possible_impact": "小区覆盖范围收缩，用户被迫切换至邻区，邻区负荷上升"
+  },
+  {
+    "timestamp": "2026-04-28 02:09:00",
+    "cell_id": "CELL_016",
+    "alarm_type": "hardware_warning",
+    "severity": "critical",
+    "description": "RSRP 继续恶化至 -100 dBm，SINR 跌至 -2.0 dB，切换成功率 84.8%，硬件故障可能性极高",
+    "possible_impact": "小区近乎瘫痪，需立即派单排查 RRU / 天馈系统"
+  }
+]

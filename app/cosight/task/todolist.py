@@ -1,4 +1,4 @@
-# Copyright 2025 ZTE Corporation.
+﻿# Copyright 2025 ZTE Corporation.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -17,6 +17,7 @@ import re
 from typing import List, Optional, Dict, Tuple
 import os
 import platform
+import time
 from pathlib import PureWindowsPath, PurePosixPath
 
 from app.common.logger_util import logger
@@ -38,6 +39,12 @@ class Plan:
         self.step_notes = {step: "" for step in self.steps}
         self.step_details = {step: "" for step in self.steps}
         self.step_files = {step: "" for step in self.steps}
+        self.step_facts = {step: [] for step in self.steps}
+        self.step_artifacts = {step: [] for step in self.steps}
+        self.step_blockers = {step: [] for step in self.steps}
+        self.step_confidence = {step: None for step in self.steps}
+        self.control_events = []
+        self.verified_steps = []
         # 存储每个步骤的工具调用信息
         self.step_tool_calls = {step: [] for step in self.steps}
         # 使用邻接表表示依赖关系
@@ -54,7 +61,7 @@ class Plan:
     def get_plan_result(self):
         return self.result
 
-    def get_ready_steps(self) -> List[int]:
+    def get_ready_steps(self, strict_mode: bool = False) -> List[int]:
         """获取所有前置依赖都已完成的步骤索引
 
         返回:
@@ -67,7 +74,12 @@ class Plan:
             dependencies = self.dependencies.get(step_index, [])
 
             # 检查所有依赖是否都已完成
-            if all(self.step_statuses.get(self.steps[int(dep)]) not  in["not_started","in_progress"]  for dep in dependencies):
+            require_completed = strict_mode or os.environ.get("COSIGHT_REQUIRE_COMPLETED_DEPS", "").strip().lower() in {"1", "true", "yes", "on"}
+            if require_completed:
+                deps_ready = all(self.step_statuses.get(self.steps[int(dep)]) == "completed" for dep in dependencies)
+            else:
+                deps_ready = all(self.step_statuses.get(self.steps[int(dep)]) not in ["not_started", "in_progress"] for dep in dependencies)
+            if deps_ready:
                 # 检查步骤本身是否未开始
                 if self.step_statuses.get(self.steps[step_index]) == "not_started":
                     ready_steps.append(step_index)
@@ -88,7 +100,12 @@ class Plan:
             new_statuses = {}
             new_notes = {}
             new_details = {}
+            new_files = {}
             new_tool_calls = {}
+            new_facts = {}
+            new_artifacts = {}
+            new_blockers = {}
+            new_confidence = {}
 
             # First, process all steps in the input order
             for step in steps:
@@ -98,27 +115,51 @@ class Plan:
                     new_statuses[step] = self.step_statuses.get(step)
                     new_notes[step] = self.step_notes.get(step)
                     new_details[step] = self.step_details.get(step)
+                    new_files[step] = self.step_files.get(step, "")
                     new_tool_calls[step] = self.step_tool_calls.get(step, [])
+                    new_facts[step] = self.step_facts.get(step, [])
+                    new_artifacts[step] = self.step_artifacts.get(step, [])
+                    new_blockers[step] = self.step_blockers.get(step, [])
+                    new_confidence[step] = self.step_confidence.get(step)
                 # If step exists in current steps and is not started, preserve as not_started
                 elif step in self.steps:
                     new_steps.append(step)
                     new_statuses[step] = "not_started"
                     new_notes[step] = self.step_notes.get(step)
                     new_details[step] = self.step_details.get(step)
+                    new_files[step] = self.step_files.get(step, "")
                     new_tool_calls[step] = self.step_tool_calls.get(step, [])
+                    new_facts[step] = self.step_facts.get(step, [])
+                    new_artifacts[step] = self.step_artifacts.get(step, [])
+                    new_blockers[step] = self.step_blockers.get(step, [])
+                    new_confidence[step] = self.step_confidence.get(step)
                 # If step is new, add as not_started
                 else:
                     new_steps.append(step)
                     new_statuses[step] = "not_started"
                     new_notes[step] = ""
                     new_details[step] = ""
+                    new_files[step] = ""
                     new_tool_calls[step] = []
+                    new_facts[step] = []
+                    new_artifacts[step] = []
+                    new_blockers[step] = []
+                    new_confidence[step] = None
 
             self.steps = new_steps
             self.step_statuses = new_statuses
             self.step_notes = new_notes
             self.step_details = new_details
+            self.step_files = new_files
             self.step_tool_calls = new_tool_calls
+            self.step_facts = new_facts
+            self.step_artifacts = new_artifacts
+            self.step_blockers = new_blockers
+            self.step_confidence = new_confidence
+            self.verified_steps = [
+                step_index for step_index in getattr(self, "verified_steps", [])
+                if isinstance(step_index, int) and 0 <= step_index < len(self.steps)
+            ]
         logger.info(f"before update dependencies: {self.dependencies}")
         if dependencies:
             self.dependencies.clear()
@@ -152,6 +193,12 @@ class Plan:
             self.step_notes[step] = step_notes
             self.step_files[step] = file_path_info
 
+        if step_status == "completed" and not self.step_facts.get(step):
+            auto_facts = self.auto_extract_facts(step_notes or "", step_index)
+            if auto_facts:
+                logger.info(f"auto_extract_facts extracted {len(auto_facts)} facts for step {step_index}")
+                self.add_facts(step_index, facts=auto_facts)
+
         # Validate status if marking as completed
         if step_status == "completed":
             # Check if all dependencies are completed
@@ -159,7 +206,72 @@ class Plan:
                        self.dependencies.get(step_index, [])):
                 raise ValueError(f"Cannot complete step {step_index} before its dependencies are completed")
 
-    def add_tool_call(self, step_index: int, tool_name: str, tool_args: str, tool_result: str = None) -> None:
+    def auto_extract_facts(self, step_notes: str, step_index: int) -> List[Dict]:
+        """Extract compact facts from step notes without adding an Actor tool call."""
+        raw_text = str(step_notes or "")
+        compact_text = " ".join(raw_text.split())
+        facts: List[Dict] = []
+        seen = set()
+
+        def add_fact(key: str, value: str, source: str, confidence: float, evidence: str) -> None:
+            key = " ".join(str(key or "").split())[:120]
+            value = " ".join(str(value or "").split())[:500]
+            evidence = " ".join(str(evidence or "").split())[:500]
+            identity = (key.lower(), value)
+            if not key or not value or identity in seen:
+                return
+            facts.append({
+                "key": key,
+                "value": value,
+                "source": source,
+                "confidence": confidence,
+                "evidence": evidence,
+            })
+            seen.add(identity)
+
+        # Layer 1: explicit key:value / key=value pairs in notes.
+        kv_pattern = re.compile(
+            r"^\s*[-*]?\s*([A-Za-z_][\w .-]{0,60}|[\u4e00-\u9fff][\u4e00-\u9fff\w .-]{0,30})\s*[:=：]\s*(.+?)\s*$"
+        )
+        for line in raw_text.splitlines():
+            match = kv_pattern.match(line)
+            if not match:
+                continue
+            add_fact(match.group(1), match.group(2), "auto_regex_kv", 0.6, line)
+            if len(facts) >= 5:
+                break
+
+        # Layer 2: answer/result/total numeric facts, useful for GAIA calculations.
+        answer_patterns = [
+            re.compile(r"(?i)\b(final answer|answer|result|total)\b\s*[:=：]?\s*([-+]?\d+(?:\.\d+)?%?)"),
+            re.compile(r"(答案|结果|总计|合计)\s*[:=：]?\s*([-+]?\d+(?:\.\d+)?%?)"),
+        ]
+        for pattern in answer_patterns:
+            for match in pattern.finditer(raw_text):
+                add_fact(str(match.group(1)).lower(), match.group(2), "auto_regex_answer", 0.7, match.group(0))
+                if len(facts) >= 8:
+                    break
+            if len(facts) >= 8:
+                break
+
+        # Layer 3: fallback compact summary so dependency views still have context.
+        if not facts and compact_text:
+            add_fact("step_summary", compact_text[:300], "auto_summary", 0.4, compact_text[:300])
+
+        return facts[:8]
+
+    def _extract_fallback_facts(self, step_notes: str) -> List[Dict]:
+        """Backward-compatible wrapper for older callers."""
+        return self.auto_extract_facts(step_notes, -1)
+
+    def add_tool_call(
+            self,
+            step_index: int,
+            tool_name: str,
+            tool_args: str,
+            tool_result: str = None,
+            status: str = "success",
+            error: str = None) -> None:
         """Add tool call information to a specific step.
 
         Args:
@@ -176,9 +288,12 @@ class Plan:
                 self.step_tool_calls[global_key] = []
             
             tool_call_info = {
+                "tool": tool_name,
                 "tool_name": tool_name,
                 "tool_args": tool_args,
                 "tool_result": tool_result,
+                "status": status,
+                "error": error,
                 "timestamp": self._get_current_timestamp()
             }
             self.step_tool_calls[global_key].append(tool_call_info)
@@ -191,9 +306,12 @@ class Plan:
         
         step = self.steps[step_index]
         tool_call_info = {
+            "tool": tool_name,
             "tool_name": tool_name,
             "tool_args": tool_args,
             "tool_result": tool_result,
+            "status": status,
+            "error": error,
             "timestamp": self._get_current_timestamp()
         }
         
@@ -201,6 +319,84 @@ class Plan:
             self.step_tool_calls[step] = []
         self.step_tool_calls[step].append(tool_call_info)
         logger.info(f"Added tool call for step {step_index}: {tool_name}")
+
+    def add_facts(
+            self,
+            step_index: int,
+            facts: Optional[List[Dict]] = None,
+            artifacts: Optional[List[str]] = None,
+            blockers: Optional[List[str]] = None,
+            confidence: Optional[float] = None) -> Dict[str, int]:
+        """Record structured facts and execution signals for one step."""
+        if step_index < 0 or step_index >= len(self.steps):
+            raise ValueError(f"Invalid step_index: {step_index}. Valid indices range from 0 to {len(self.steps) - 1}.")
+
+        step = self.steps[step_index]
+        self.step_facts.setdefault(step, [])
+        self.step_artifacts.setdefault(step, [])
+        self.step_blockers.setdefault(step, [])
+        self.step_confidence.setdefault(step, None)
+
+        def clamp_text(value, limit: int) -> str:
+            text = "" if value is None else " ".join(str(value).split())
+            return text[:limit]
+
+        existing = {
+            (str(item.get("key", "")), str(item.get("value", "")))
+            for item in self.step_facts.get(step, [])
+            if isinstance(item, dict)
+        }
+        added_facts = 0
+        for fact in facts or []:
+            if not isinstance(fact, dict):
+                continue
+            key = clamp_text(fact.get("key", ""), 120)
+            value = clamp_text(fact.get("value", ""), 500)
+            if not key or not value or (key, value) in existing:
+                continue
+            raw_confidence = fact.get("confidence", confidence)
+            try:
+                fact_confidence = None if raw_confidence is None else max(0.0, min(1.0, float(raw_confidence)))
+            except (TypeError, ValueError):
+                fact_confidence = None
+            self.step_facts[step].append({
+                "key": key,
+                "value": value,
+                "source": clamp_text(fact.get("source", "unknown"), 300) or "unknown",
+                "confidence": fact_confidence,
+                "evidence": clamp_text(fact.get("evidence", ""), 500),
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            existing.add((key, value))
+            added_facts += 1
+            if len(self.step_facts[step]) >= 20:
+                break
+
+        added_artifacts = 0
+        for artifact in artifacts or []:
+            text = clamp_text(artifact, 300)
+            if text and text not in self.step_artifacts[step]:
+                self.step_artifacts[step].append(text)
+                added_artifacts += 1
+
+        added_blockers = 0
+        for blocker in blockers or []:
+            text = clamp_text(blocker, 300)
+            if text and text not in self.step_blockers[step]:
+                self.step_blockers[step].append(text)
+                added_blockers += 1
+
+        if confidence is not None:
+            try:
+                self.step_confidence[step] = max(0.0, min(1.0, float(confidence)))
+            except (TypeError, ValueError):
+                pass
+
+        return {
+            "facts": added_facts,
+            "artifacts": added_artifacts,
+            "blockers": added_blockers,
+        }
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp string."""
@@ -397,3 +593,4 @@ def extract_and_replace_paths(text: str, folder_name: str, workspace_path: str) 
 def process_text_with_workspace(text: str, work_space_path: str) -> Tuple[str, List[Dict[str, str]]]:
     folder_name = get_last_folder_name(work_space_path)
     return extract_and_replace_paths(text, folder_name, work_space_path)
+

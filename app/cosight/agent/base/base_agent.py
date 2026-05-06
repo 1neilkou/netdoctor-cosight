@@ -15,6 +15,7 @@
 
 import inspect
 import json
+import os
 import sys
 import time
 from typing import List, Dict, Any
@@ -33,6 +34,97 @@ from app.cosight.agent.base.tool_arg_mapping import FUNCTION_ARG_MAPPING
 from config.config import get_turbo_mode
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+MAX_REACT_ROUNDS = _env_int("MAX_REACT_ROUNDS", 15)
+MAX_CONSECUTIVE_ERRORS = _env_int("MAX_CONSECUTIVE_ERRORS", 5)
+TOOL_ERROR_MARKERS = (
+    "error",
+    "failed",
+    "no module named",
+    "is stubbed",
+    "not found",
+    "[fetch_failed]",
+)
+COMPLETION_CHECK_NOTE_MARKERS = (
+    "unable",
+    "cannot",
+    "failed",
+    "error",
+    "no result",
+    "找不到",
+    "无法",
+    "失败",
+    "没有找到",
+    "无结果",
+)
+
+
+def _completion_check_enabled() -> bool:
+    mode = os.environ.get("COSIGHT_EXPERIMENT_MODE", "baseline").strip().lower()
+    if mode != "optimized":
+        return False
+    value = os.environ.get("COSIGHT_ENABLE_COMPLETION_CHECK", "1")
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _completion_check_needed(plan: Any, step_index: int | None, step_notes: str) -> bool:
+    notes = str(step_notes or "").strip()
+    if not notes or len(notes) < 20:
+        return True
+    lower_notes = notes.lower()
+    if any(marker.lower() in lower_notes for marker in COMPLETION_CHECK_NOTE_MARKERS):
+        return True
+    if plan is None or step_index is None:
+        return False
+    try:
+        steps = getattr(plan, "steps", [])
+        step = steps[step_index] if 0 <= step_index < len(steps) else None
+    except Exception:
+        step = None
+    tool_calls = getattr(plan, "step_tool_calls", {})
+    if isinstance(tool_calls, dict):
+        calls = tool_calls.get(step, []) if step is not None else []
+        return len(calls or []) == 0
+    return False
+
+
+def _check_step_completion(step_description: str, step_notes: str, llm: ChatLLM | None) -> bool:
+    """Return True when step_notes substantially satisfy the step requirement.
+
+    The check is intentionally fail-open: if the checker LLM is unavailable or
+    errors, execution continues so the quality gate cannot block the pipeline.
+    """
+    if llm is None:
+        return True
+    notes = str(step_notes or "").strip()
+    if not notes:
+        return False
+    system_prompt = "你是质量检查助手，只输出 YES 或 NO。"
+    user_prompt = (
+        f"步骤要求：{step_description}\n"
+        f"执行结果：{notes[:4000]}\n\n"
+        "执行结果是否实质性地完成了步骤要求？\n"
+        "结果为空、无关、或只说无法完成，输出 NO。\n"
+        "否则输出 YES。"
+    )
+    try:
+        content = llm.chat_to_llm([
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ], max_tokens=8)
+    except Exception as exc:
+        logger.warning(f"completion check failed open: {exc}")
+        return True
+    answer = str(content or "").strip().upper()
+    return answer.startswith("YES")
+
+
 class BaseAgent:
     def __init__(self, agent_instance: AgentInstance, llm: ChatLLM, functions: {}, plan_id: str = None):
         self.agent_instance = agent_instance
@@ -46,6 +138,7 @@ class BaseAgent:
         self.functions = functions
         self.history = []
         self.plan_id = plan_id
+        self._completion_check_counts = {}
         self._tool_event_sequence = 0  # 工具事件序列号
         self._file_saver_call_count = {}  # 记录每个步骤的file_saver调用次数
         # Only set plan to None if it hasn't been set by subclass
@@ -387,15 +480,37 @@ class BaseAgent:
         if turbo_mode:
             max_iteration = min(max_iteration, 5)  # 急速模式下最多5次迭代
             logger.info(f"Turbo mode enabled: max_iteration reduced to {max_iteration}")
+        if step_index is not None:
+            max_iteration = min(max_iteration, MAX_REACT_ROUNDS)
+        consecutive_errors = 0
         
         for i in range(max_iteration):
             # 为了避免日志过大，这里不再打印完整 messages，只记录关键元信息
             logger.info(f"act agent call with tools start: iter={i}, step_index={step_index}, "
                         f"msg_count={len(messages)}, tools_count={len(self.tools)}")
+            if step_index is not None:
+                self._record_actor_prompt_stats(messages, step_index)
             response = self.llm.create_with_tools(messages, self.tools)
 
             # Process initial response
+            before_len = len(messages)
             result = self._process_response(response, messages, step_index)
+            tool_results = [
+                message for message in messages[before_len:]
+                if isinstance(message, dict) and message.get("role") == "tool"
+            ]
+            if step_index is not None and tool_results:
+                error_count = sum(1 for tool_result in tool_results if self._is_tool_error(tool_result))
+                success_count = len(tool_results) - error_count
+                if success_count:
+                    consecutive_errors = 0
+                elif error_count:
+                    consecutive_errors += error_count
+                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                    reason = f"工具连续报错 {MAX_CONSECUTIVE_ERRORS} 次，停止重试"
+                    logger.warning(reason)
+                    self._mark_step_blocked(step_index, reason)
+                    return reason
             # result 也可能较大，这里不再完整打印，只给出是否结束的信息
             logger.info(
                 f"iter {i} for {self.agent_instance.instance_name} call tools done, "
@@ -404,9 +519,152 @@ class BaseAgent:
             if result:
                 return result
 
+        if step_index is not None and max_iteration >= MAX_REACT_ROUNDS:
+            reason = f"超过最大轮数限制 {MAX_REACT_ROUNDS}，强制结束"
+            logger.warning(reason)
+            self._mark_step_blocked(step_index, reason)
+            return reason
+
         if max_iteration > 1:
             return self._handle_max_iteration(messages, step_index)
         return messages[-1].get("content")
+
+    def _is_tool_error(self, tool_result: Dict[str, Any]) -> bool:
+        content = "" if tool_result is None else tool_result.get("content")
+        if content is None:
+            return True
+        text = str(content).strip()
+        if not text:
+            return True
+        lower_text = text.lower()
+        return any(marker in lower_text for marker in TOOL_ERROR_MARKERS)
+
+    def _mark_step_blocked(self, step_index: int, reason: str) -> None:
+        if self.plan is None or step_index is None:
+            return
+        try:
+            self.plan.mark_step(step_index, step_status="blocked", step_notes=reason)
+        except Exception as exc:
+            logger.warning(f"Failed to mark step {step_index} blocked: {exc}")
+
+    def _is_completed_mark_step(self, function_name: str, args_dict: Dict[str, Any]) -> bool:
+        if function_name != "mark_step" or not isinstance(args_dict, dict):
+            return False
+        status = args_dict.get("step_status", args_dict.get("status", ""))
+        return str(status or "").strip().lower() == "completed"
+
+    def _should_reject_completed_mark_step(self, args_dict: Dict[str, Any], step_index: int | None) -> bool:
+        if not _completion_check_enabled():
+            return False
+        if self.plan is None:
+            return False
+        try:
+            effective_step_index = int(args_dict.get("step_index", step_index))
+        except (TypeError, ValueError):
+            effective_step_index = step_index
+        if effective_step_index is None:
+            return False
+        count = self._completion_check_counts.get(effective_step_index, 0)
+        if count >= 2:
+            return False
+        notes = str(
+            args_dict.get("step_notes")
+            or args_dict.get("notes")
+            or args_dict.get("result")
+            or ""
+        )
+        if not _completion_check_needed(self.plan, effective_step_index, notes):
+            return False
+        steps = getattr(self.plan, "steps", [])
+        step_description = steps[effective_step_index] if 0 <= effective_step_index < len(steps) else ""
+        llm = getattr(self, "completion_check_llm", None)
+        passed = _check_step_completion(step_description, notes, llm)
+        if passed:
+            return False
+        self._completion_check_counts[effective_step_index] = count + 1
+        logger.info(
+            "Completion check rejected mark_step(completed) for step %s, attempt %s",
+            effective_step_index,
+            self._completion_check_counts[effective_step_index],
+        )
+        return True
+
+    def _record_actor_prompt_stats(self, messages: List[Dict[str, Any]], step_index=None):
+        try:
+            message_content_chars = 0
+            system_prompt_chars = 0
+            for message in messages or []:
+                if isinstance(message, dict):
+                    content_chars = len(str(message.get("content", "") or ""))
+                    message_content_chars += content_chars
+                    if message.get("role") == "system":
+                        system_prompt_chars += content_chars
+            tool_schema_chars = len(json.dumps(self.tools or [], ensure_ascii=False, default=str))
+            prompt_chars = message_content_chars + tool_schema_chars
+            mode = os.environ.get("COSIGHT_EXPERIMENT_MODE", "baseline")
+            task_id = os.environ.get("COSIGHT_TASK_ID", "")
+            stat = {
+                "role": "actor",
+                "step_index": step_index,
+                "prompt_chars": prompt_chars,
+                "prompt_est_tokens": prompt_chars // 4,
+                "message_content_chars": message_content_chars,
+                "message_content_est_tokens": message_content_chars // 4,
+                "tool_schema_chars": tool_schema_chars,
+                "tool_schema_est_tokens": tool_schema_chars // 4,
+                "message_count": len(messages or []),
+                "tool_count": len(self.tools or []),
+                "mode": mode,
+                "task_id": task_id,
+            }
+            breakdown = {
+                "role": "actor",
+                "step_index": step_index,
+                "mode": mode,
+                "task_id": task_id,
+                "system_prompt_chars": system_prompt_chars,
+                "final_prompt_chars": prompt_chars,
+                "final_prompt_est_tokens": prompt_chars // 4,
+            }
+            if mode == "optimized" and self.plan is not None:
+                templates = getattr(self.plan, "actor_prompt_breakdown_templates", {}) or {}
+                if isinstance(templates, dict):
+                    breakdown.update(templates.get(step_index, {}) or {})
+            print(
+                "[ACTOR_PROMPT] "
+                f"mode={stat['mode']} task_id={stat['task_id']} step={step_index} "
+                f"chars={stat['prompt_chars']} est_tokens={stat['prompt_est_tokens']} "
+                f"messages={stat['message_count']} tools={stat['tool_count']}"
+            )
+            if mode == "optimized":
+                print(
+                    "[ACTOR_PROMPT_BREAKDOWN] "
+                    f"mode={mode} task_id={task_id} step={step_index} "
+                    f"current={breakdown.get('current_step_chars', 0)} "
+                    f"deps={breakdown.get('dependency_context_chars', 0)} "
+                    f"recent={breakdown.get('recent_context_chars', 0)} "
+                    f"overview={breakdown.get('compact_plan_overview_chars', 0)} "
+                    f"artifacts={breakdown.get('artifact_refs_chars', 0)} "
+                    f"key_values={breakdown.get('key_values_chars', 0)} "
+                    f"total={breakdown['final_prompt_chars']} "
+                    f"est_tokens={breakdown['final_prompt_est_tokens']}"
+                )
+            else:
+                print(
+                    "[ACTOR_PROMPT_BREAKDOWN] "
+                    f"mode={mode} task_id={task_id} step={step_index} "
+                    f"total={breakdown['final_prompt_chars']} "
+                    f"est_tokens={breakdown['final_prompt_est_tokens']}"
+                )
+            if self.plan is not None:
+                if not hasattr(self.plan, "actor_prompt_stats"):
+                    self.plan.actor_prompt_stats = []
+                self.plan.actor_prompt_stats.append(stat)
+                if not hasattr(self.plan, "actor_prompt_breakdowns"):
+                    self.plan.actor_prompt_breakdowns = []
+                self.plan.actor_prompt_breakdowns.append(breakdown)
+        except Exception as exc:
+            logger.warning(f"Failed to record actor prompt stats: {exc}")
 
     def _process_response(self, response, messages, step_index):
         # 构建 assistant 消息，支持 thinking mode 的 reasoning_content 字段
@@ -432,6 +690,12 @@ class BaseAgent:
 
         # Check for termination conditions
         for result in results:
+            if result.get("completion_check_failed"):
+                messages.append({
+                    "role": "user",
+                    "content": "你的结果还没完成步骤要求，请继续执行。",
+                })
+                return None
             if result["name"] in ["terminate", "mark_step"]:
                 return result["content"]
         return None
@@ -532,6 +796,16 @@ class BaseAgent:
                     logger.warning(f"file_saver called {self._file_saver_call_count[step_index]} times in step {step_index}. "
                                  f"Consider consolidating file saves to improve performance.")
 
+            if self._is_completed_mark_step(function_name, args_dict) and self._should_reject_completed_mark_step(args_dict, step_index):
+                content = "你的结果还没完成步骤要求，请继续执行。"
+                return {
+                    "role": "tool",
+                    "name": function_name,
+                    "content": content,
+                    "tool_call_id": tool_call_id,
+                    "completion_check_failed": True,
+                }
+
             function_to_call = self.functions[function_name]
 
             # 检查是否是异步函数
@@ -560,7 +834,7 @@ class BaseAgent:
             # 记录工具调用信息到Plan对象（如果有plan引用且step_index有效）
             if self.plan and step_index is not None and hasattr(self.plan, 'add_tool_call'):
                 try:
-                    self.plan.add_tool_call(step_index, function_name, function_args, str(result))
+                    self.plan.add_tool_call(step_index, function_name, function_args, str(result), status="success")
                 except Exception as e:
                     logger.warning(f"Failed to record tool call to plan: {e}")
 
@@ -579,6 +853,18 @@ class BaseAgent:
                                 "", step_index, duration, error_msg)
             
             logger.error(f"Unhandled exception: {e}", exc_info=True)
+            if self.plan and step_index is not None and hasattr(self.plan, 'add_tool_call'):
+                try:
+                    self.plan.add_tool_call(
+                        step_index,
+                        function_name,
+                        function_args,
+                        "",
+                        status="failed",
+                        error=error_msg,
+                    )
+                except Exception as record_exc:
+                    logger.warning(f"Failed to record failed tool call to plan: {record_exc}")
             return {
                 "role": "tool",
                 "name": function_name,
@@ -683,7 +969,7 @@ class BaseAgent:
                 if self.plan and hasattr(self.plan, 'add_tool_call'):
                     try:
                         # MCP工具调用没有step_index，使用-1表示全局工具调用
-                        self.plan.add_tool_call(-1, function_name, function_args, str(result))
+                        self.plan.add_tool_call(-1, function_name, function_args, str(result), status="success")
                     except Exception as e:
                         logger.warning(f"Failed to record MCP tool call to plan: {e}")
                 
@@ -700,6 +986,11 @@ class BaseAgent:
                 # 推送MCP工具执行错误事件
                 self._push_tool_event("tool_error", function_name, function_args, 
                                     "", -1, duration, error_msg)
+                if self.plan and hasattr(self.plan, 'add_tool_call'):
+                    try:
+                        self.plan.add_tool_call(-1, function_name, function_args, "", status="failed", error=error_msg)
+                    except Exception as record_exc:
+                        logger.warning(f"Failed to record failed MCP tool call to plan: {record_exc}")
                 
                 return {
                     "role": "tool",
@@ -716,6 +1007,11 @@ class BaseAgent:
                                 "", -1, duration, error_msg)
             
             logger.error(f"Unhandled exception: {e}", exc_info=True)
+            if self.plan and hasattr(self.plan, 'add_tool_call'):
+                try:
+                    self.plan.add_tool_call(-1, function_name, function_args, "", status="failed", error=error_msg)
+                except Exception as record_exc:
+                    logger.warning(f"Failed to record failed MCP tool call to plan: {record_exc}")
             return {
                 "role": "tool",
                 "name": function_name,

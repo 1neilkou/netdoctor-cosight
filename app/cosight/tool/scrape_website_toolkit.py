@@ -23,6 +23,24 @@ from bs4 import BeautifulSoup
 from app.common.logger_util import logger
 
 
+def _is_fetch_failed(content: str) -> bool:
+    failure_signals = [
+        "Verification required",
+        "403 Forbidden",
+        "Access Denied",
+        "Login required",
+        "Sign in to",
+        "Subscribe to read",
+        "Please verify you are a human",
+    ]
+    content_lower = str(content or "").lower()
+    return any(signal.lower() in content_lower for signal in failure_signals)
+
+
+def _fetch_failed_message(url: str) -> str:
+    return f"[FETCH_FAILED] 页面访问被拦截，内容不可用：{url}"
+
+
 class ScrapeWebsiteTool:
     name: str = "Read website content"
     description: str = "A tool that can be used to read a website content."
@@ -85,7 +103,10 @@ def fetch_website_content(website_url):
         # 检查URL是否指向PDF文件
         if website_url.lower().endswith('.pdf') or _is_pdf_url(website_url):
             logger.info(f'Detected PDF URL: {website_url}, using PDF parser instead')
-            return _fetch_pdf_content(website_url)
+            content = _fetch_pdf_content(website_url)
+            if _is_fetch_failed(content):
+                return _fetch_failed_message(website_url)
+            return content
         
         # 对于普通网页，使用原有的抓取逻辑
         scrapeWebsiteTool = ScrapeWebsiteTool(website_url)
@@ -95,11 +116,14 @@ def fetch_website_content(website_url):
             loop = asyncio.get_running_loop()
             # 如果已经在事件循环中，创建新任务
             task = loop.create_task(scrapeWebsiteTool._run(website_url))
-            return loop.run_until_complete(task)
+            content = loop.run_until_complete(task)
         except RuntimeError:
             # 如果没有事件循环，创建新的
             loop = asyncio.new_event_loop()
-            return loop.run_until_complete(scrapeWebsiteTool._run(website_url))
+            content = loop.run_until_complete(scrapeWebsiteTool._run(website_url))
+        if _is_fetch_failed(content):
+            return _fetch_failed_message(website_url)
+        return content
     except Exception as e:
         logger.error(f"fetch_website_content error {str(e)}", exc_info=True)
         # 确保返回的是字符串而不是协程

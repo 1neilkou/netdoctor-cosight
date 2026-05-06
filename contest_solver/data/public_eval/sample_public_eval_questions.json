@@ -1,0 +1,57 @@
+[
+  {
+    "question_id": "sample_gsm8k_00001",
+    "source": "gsm8k_sample",
+    "level": 1,
+    "question_type": "简单计算",
+    "question": "手写测试题：小明有3个苹果，又买了4个苹果，现在共有多少个苹果？",
+    "expected_answer": "7",
+    "expected_tools": ["calculator_tool", "answer_verifier"],
+    "expected_trace_points": ["读取3和4", "执行加法", "输出7"],
+    "metadata": {"note": "hand-written schema smoke test, not real GSM8K data"}
+  },
+  {
+    "question_id": "sample_hotpotqa_00001",
+    "source": "hotpotqa_sample",
+    "level": 2,
+    "question_type": "多跳问答",
+    "question": "手写测试题：A城市位于B省，B省省会是C市。A城市所在省的省会是哪座城市？",
+    "expected_answer": "C市",
+    "expected_tools": ["question_parser", "trace_recorder", "answer_verifier"],
+    "expected_trace_points": ["识别A城市所在省", "关联B省省会", "输出C市"],
+    "metadata": {"note": "hand-written schema smoke test, not real HotpotQA data"}
+  },
+  {
+    "question_id": "sample_drop_00001",
+    "source": "drop_sample",
+    "level": 2,
+    "question_type": "材料数值推理",
+    "question": "手写测试材料：球队上半场得12分，下半场得15分。问题：全场共得多少分？",
+    "expected_answer": "27",
+    "expected_tools": ["question_parser", "calculator_tool", "answer_verifier"],
+    "expected_trace_points": ["读取12和15", "执行加法", "输出27"],
+    "metadata": {"note": "hand-written schema smoke test, not real DROP data"}
+  },
+  {
+    "question_id": "sample_musique_00001",
+    "source": "musique_sample",
+    "level": 2,
+    "question_type": "多跳问答",
+    "question": "手写测试题：甲发明了设备X，甲出生在乙国。设备X发明者出生在哪个国家？",
+    "expected_answer": "乙国",
+    "expected_tools": ["question_parser", "trace_recorder", "answer_verifier"],
+    "expected_trace_points": ["识别设备X发明者", "追踪发明者出生国家", "输出乙国"],
+    "metadata": {"note": "hand-written schema smoke test, not real MuSiQue data"}
+  },
+  {
+    "question_id": "sample_gaia_00001",
+    "source": "gaia_sample",
+    "level": 3,
+    "question_type": "复杂工具任务",
+    "question": "手写测试题：制定一个三步计划，先读取文件摘要，再计算两个数的和，最后校验答案格式。",
+    "expected_answer": "包含读取、计算、校验三个步骤的计划",
+    "expected_tools": ["question_parser", "task_planner", "trace_recorder", "answer_verifier"],
+    "expected_trace_points": ["解析任务目标", "规划读取和计算步骤", "校验答案格式"],
+    "metadata": {"note": "hand-written schema smoke test, not real GAIA data"}
+  }
+]

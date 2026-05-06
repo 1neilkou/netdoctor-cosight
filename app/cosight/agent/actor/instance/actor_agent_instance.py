@@ -74,6 +74,8 @@ def create_actor_template(template_name, work_space_path):
         'max_iteration': 20,
         'business_type': {}
     }
+    # Facts are extracted automatically after mark_step; keep record_facts out of
+    # the Actor tool schema so every ReAct prompt stays compact.
     template_content['skills'].extend(register_mcp_tools())
     load_search_skill(template_content)
     return AgentTemplate(**template_content)
