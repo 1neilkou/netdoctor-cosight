@@ -42,6 +42,54 @@ def _fetch_fallback_prompt() -> str:
     )
 
 
+SKILL_RULES = [
+    {
+        "keywords": ["journal", "article", "doi", "paper", "published", "citation",
+                     "muse", "jstor", "springer", "arxiv", "pubmed", "academic"],
+        "skill_file": "skills/gaia/academic-paper.md",
+    },
+    {
+        "keywords": ["wikipedia", "according to wikipedia", "wiki", "according to the"],
+        "skill_file": "skills/gaia/wikipedia-lookup.md",
+    },
+    {
+        "keywords": ["calculate", "subtract", "sum up", "add up", "compute",
+                     "how many years", "how many days", "percentage", "multiply",
+                     "divide", "arithmetic", "formula"],
+        "skill_file": "skills/gaia/numerical-calculation.md",
+    },
+    {
+        "keywords": ["docx", "pdf", "xlsx", "file", "document", "attachment",
+                     "read the", "open the", "extract from"],
+        "skill_file": "skills/gaia/file-reading.md",
+    },
+]
+
+
+def _detect_and_load_skill(step_description: str) -> str:
+    if not step_description:
+        return ""
+
+    desc_lower = step_description.lower()
+
+    for rule in SKILL_RULES:
+        if any(kw in desc_lower for kw in rule["keywords"]):
+            skill_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "..", "..", "..", "..",
+                rule["skill_file"]
+            )
+            skill_path = os.path.normpath(skill_path)
+            try:
+                if os.path.exists(skill_path):
+                    with open(skill_path, "r", encoding="utf-8") as f:
+                        return f.read().strip()
+            except Exception:
+                pass
+
+    return ""
+
+
 def actor_system_prompt(work_space_path: str):
     # 检查是否启用急速模式
     turbo_mode = get_turbo_mode()
@@ -337,6 +385,8 @@ def actor_execute_task_prompt_v2(task: str, step_index: int, actor_view: dict, w
         if view.get("_fact_store_enabled")
         else "5. Keep reusable facts, artifacts, blockers, and confidence concise in the step result.\n"
     )
+    skill_content = _detect_and_load_skill(str(view.get("current_step", "")))
+    skill_section = f"Skill guide:\n{skill_content}\n\n" if skill_content else ""
     prompt = (
         f"{_attachment_prompt()}"
         f"Question:\n{sections['question']}\n\n"
@@ -348,6 +398,7 @@ def actor_execute_task_prompt_v2(task: str, step_index: int, actor_view: dict, w
         f"{fact_instruction}"
         "6. Return a concise step result with important facts, values, and file paths.\n\n"
         f"{_fetch_fallback_prompt()}\n"
+        f"{skill_section}"
         f"Current step:\n{sections['current_step']}\n\n"
         f"Dependency facts:\n{sections['dependency_facts']}\n\n"
         f"Artifact refs:\n{sections['artifact_refs']}\n\n"

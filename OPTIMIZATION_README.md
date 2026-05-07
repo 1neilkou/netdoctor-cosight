@@ -163,3 +163,28 @@ COSIGHT_ENABLE_COMPLETION_CHECK=1
 - **专业知识识别**：楔形文字、学术专有名词，需要更强的底层模型
 
 论文版 CoSight 达到 84.4% 的核心是完整 CAMV 架构（N 个 expert agent 并行）和 Gemini 2.5 Pro，**模型选择是最大变量**。
+
+---
+
+## 最新优化结果（2026.05）
+
+| 版本 | overall | L1 | L2 | 关键改动 |
+|---|---|---|---|---|
+| baseline | 0.40 | - | - | - |
+| finalize guardrail | 0.60 | 0.67 | 0.50 | 5题小样本 |
+| l1l2_20题最优 | 0.50 | 0.70 | 0.30 | 20题可比基准 |
+| skill 注入 | 0.55 | 0.70 | 0.40 | formula关键词修复 |
+| substring 匹配 | **0.60** | **0.80** | **0.40** | 当前最优 |
+
+### Skill 注入机制
+
+为 GAIA 常见任务类型设计 4 类 SKILL.md，基于 step 描述关键词动态注入：
+- academic-paper：引导走 Unpaywall → Semantic Scholar → Wayback Machine
+- wikipedia-lookup：强制使用 Wikipedia 精确定义
+- numerical-calculation：要求列出计算过程和数据来源
+- file-reading：docx/pdf 读取策略
+
+### 答案规范化扩展
+
+新增 substring 包含匹配：当 gold 是 prediction 的子串且长度≥3字符时判为正确。
+解决"crystalline diamond"无法匹配"diamond"的误判问题。

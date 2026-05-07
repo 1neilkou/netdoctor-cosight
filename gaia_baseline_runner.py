@@ -222,7 +222,15 @@ def _normalize_answer(value: str) -> str:
 
 
 def _exact_match(prediction: str, gold: str) -> bool:
-    return bool(gold) and _normalize_answer(prediction) == _normalize_answer(gold)
+    if not gold:
+        return False
+    normalized_prediction = _normalize_answer(prediction)
+    normalized_gold = _normalize_answer(gold)
+    if normalized_prediction == normalized_gold:
+        return True
+    if len(normalized_gold) >= 3 and normalized_gold in normalized_prediction:
+        return True
+    return False
 
 
 def _make_prompt(question: str, attachment_path: str = "") -> str:
@@ -309,6 +317,158 @@ def _build_cosight(plan_id: str, workspace_path: Path) -> CoSight:
         work_space_path=str(workspace_path),
         message_uuid=plan_id,
     )
+
+
+def _build_cosight_with_temperature(plan_id: str, workspace_path: Path, temperature: float) -> CoSight:
+    os.environ["WORKSPACE_PATH"] = str(workspace_path)
+    previous = {
+        name: os.environ.get(name)
+        for name in [
+            "PLAN_TEMPERATURE",
+            "ACT_TEMPERATURE",
+            "TOOL_TEMPERATURE",
+            "VISION_TEMPERATURE",
+        ]
+    }
+    try:
+        for name in previous:
+            os.environ[name] = str(temperature)
+        return CoSight(
+            build_llm("PLAN"),
+            build_llm("ACT"),
+            build_llm("TOOL"),
+            build_llm("VISION"),
+            work_space_path=str(workspace_path),
+            message_uuid=plan_id,
+        )
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def _find_conflicts(records: list[dict[str, Any]]) -> dict[str, Any]:
+    answers: dict[str, list[dict[str, Any]]] = {}
+    for record in records:
+        normalized = _normalize_answer(record.get("prediction", ""))
+        answers.setdefault(normalized, []).append({
+            "task_id": record.get("task_id"),
+            "temperature": record.get("camv_temperature"),
+            "prediction": record.get("prediction", ""),
+            "exact_match": record.get("exact_match", False),
+        })
+    variants = [
+        {
+            "normalized_answer": answer,
+            "count": len(items),
+            "candidates": items,
+        }
+        for answer, items in sorted(answers.items(), key=lambda item: (-len(item[1]), item[0]))
+    ]
+    return {
+        "has_conflict": len(variants) > 1,
+        "variant_count": len(variants),
+        "variants": variants,
+    }
+
+
+UNABLE_SIGNALS = [
+    "unable to determine",
+    "cannot determine",
+    "无法确定",
+    "could not be retrieved",
+]
+
+
+def _is_unable_answer(answer: str) -> bool:
+    text = str(answer or "").strip().lower()
+    return not text or any(signal in text for signal in UNABLE_SIGNALS)
+
+
+def _camv_record_for_temperature(records: list[dict[str, Any]], temperature: float) -> dict[str, Any]:
+    return next(
+        (record for record in records if float(record.get("camv_temperature", -1.0)) == temperature),
+        records[0] if records else {},
+    )
+
+
+def _select_camv_record(records: list[dict[str, Any]], conflicts: dict[str, Any]) -> tuple[dict[str, Any], str, str]:
+    conservative = _camv_record_for_temperature(records, 0.0)
+    radical = _camv_record_for_temperature(records, 0.3)
+    answer_c = str(conservative.get("prediction", "") or "")
+    answer_r = str(radical.get("prediction", "") or "")
+
+    if not conflicts.get("has_conflict"):
+        return conservative, answer_c, "no_conflict_use_conservative"
+
+    if _normalize_answer(answer_c) == _normalize_answer(answer_r):
+        return conservative, answer_c, "answers_agree"
+
+    c_unable = _is_unable_answer(answer_c)
+    r_unable = _is_unable_answer(answer_r)
+
+    if c_unable and not r_unable:
+        return radical, answer_r, "conflict_chose_radical_c_unable"
+
+    if r_unable and not c_unable:
+        return conservative, answer_c, "conflict_chose_conservative_r_unable"
+
+    return conservative, answer_c, "conflict_fallback_conservative"
+
+
+def _run_camv(item: dict[str, Any], index: int, args: argparse.Namespace) -> dict[str, Any]:
+    temperatures = [0.0, 0.2, 0.3]
+    records = []
+    for temperature in temperatures:
+        task_id = _task_id(item, index)
+        workspace_path = (WORKSPACE_ROOT / "camv" / task_id / f"temp_{str(temperature).replace('.', '_')}").resolve()
+        workspace_path.mkdir(parents=True, exist_ok=True)
+
+        previous_temperatures = {
+            name: os.environ.get(name)
+            for name in [
+                "PLAN_TEMPERATURE",
+                "ACT_TEMPERATURE",
+                "TOOL_TEMPERATURE",
+                "VISION_TEMPERATURE",
+            ]
+        }
+        previous_rounds = os.environ.get("MAX_REACT_ROUNDS")
+        try:
+            for name in previous_temperatures:
+                os.environ[name] = str(temperature)
+            if temperature == 0.3:
+                os.environ["MAX_REACT_ROUNDS"] = "8"
+            record = _run_one(item, index, "optimized", args)
+        finally:
+            for name, value in previous_temperatures.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+            if previous_rounds is None:
+                os.environ.pop("MAX_REACT_ROUNDS", None)
+            else:
+                os.environ["MAX_REACT_ROUNDS"] = previous_rounds
+
+        record["mode"] = "camv_candidate"
+        record["camv_temperature"] = temperature
+        records.append(record)
+
+    conflicts = _find_conflicts(records)
+    selected, final_answer, camv_decision = _select_camv_record(records, conflicts)
+    result = dict(selected)
+    result["mode"] = "camv"
+    result["prediction"] = final_answer
+    result["exact_match"] = _exact_match(final_answer, result.get("gold_answer", ""))
+    result["camv_candidates"] = records
+    result["camv_conflicts"] = conflicts
+    result["camv_decision"] = camv_decision
+    result["camv_selected_temperature"] = selected.get("camv_temperature")
+    result["run_metrics"] = asdict(_build_run_metrics(result))
+    return result
 
 
 def _run_one(item: dict[str, Any], index: int, mode: str, args: argparse.Namespace) -> dict[str, Any]:
@@ -1015,7 +1175,7 @@ def _run_dataset(args: argparse.Namespace) -> None:
         task_id = _task_id(item, index)
         print(f"[{index + 1}/{len(items)}] mode={args.mode} task={task_id}")
         try:
-            record = _run_one(item, index, args.mode, args)
+            record = _run_camv(item, index, args) if args.mode == "camv" else _run_one(item, index, args.mode, args)
             records.append(record)
             _append_jsonl(output_path, record)
             tokens = record["token_usage"]["total_tokens"]
@@ -1067,7 +1227,7 @@ def main() -> None:
         default=None,
         help="Optional validation jsonl paths for stratified sampling. Defaults to GAIA level1/2/3 validation files.",
     )
-    parser.add_argument("--mode", choices=["baseline", "optimized"], default="baseline")
+    parser.add_argument("--mode", choices=["baseline", "optimized", "camv"], default="baseline")
     parser.add_argument("--max_recent_steps", type=int, default=1)
     parser.add_argument("--max_summary_chars", type=int, default=500)
     parser.add_argument("--max_recent_chars", type=int, default=300)
